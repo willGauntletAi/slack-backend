@@ -1,0 +1,303 @@
+I'd like to create a new express app. It should use typescript. It will need websocket support. For local development, it should use docker compose to start a postgres database, and a redis cache primarily for pub/sub. It should use kysely for connecting to the postgres database.
+What should I do to get started?
+
+Here's a concise sequence:
+
+1. Setup project:
+```bash
+mkdir project-name
+cd project-name
+npm init -y
+```
+
+2. Install core dependencies:
+```bash
+npm i express ws redis kysely pg
+npm i -D typescript @types/express @types/ws @types/redis @types/pg ts-node
+```
+
+3. Create `tsconfig.json`:
+```json
+{
+  "compilerOptions": {
+    "target": "es2020",
+    "module": "commonjs",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "outDir": "./dist"
+  }
+}
+```
+
+4. Create `docker-compose.yml`:
+```yaml
+version: '3.8'
+services:
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: dbname
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+```
+
+5. Create basic server structure:
+```
+src/
+  index.ts
+  db/
+  websocket/
+```
+
+Need more specific instructions for any part?
+
+Will that docker-compose file create a volume to persist that data between resets?
+
+No. Add this to persist data:
+
+```yaml
+services:
+  postgres:
+    volumes:
+      - postgres_data:/var/lib/postgresql/datai
+
+volumes:
+  postgres_data:
+```
+What if I also want to run the express app in a container? Can you provide a dockerfile for that, and modify the docker-compose to also start that?
+
+Here's the Dockerfile:
+```dockerfile
+FROM node:18-slim
+WORKDIR /app
+COPY package*.json ./
+RUN npm install
+COPY . .
+RUN npm run build
+EXPOSE 3000
+CMD ["npm", "start"]
+```
+
+Modified docker-compose.yml:
+```yaml
+version: '3.8'
+services:
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    depends_on:
+      - postgres
+      - redis
+    environment:
+      - DATABASE_URL=postgres://user:password@postgres:5432/dbname
+      - REDIS_URL=redis://redis:6379
+
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: dbname
+    volumes:
+      - slack_postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+
+volumes:
+  slack_postgres_data:
+```
+
+Add build script to package.json:
+```json
+{
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js"
+  }
+}
+```
+I'd like to use kysely to manage my migrations. Can you help me scaffold that?
+
+Here's how to setup Kysely migrations:
+
+1. Install kysely-migration-cli:
+```bash
+npm i kysely-migration-cli
+```
+
+2. Create migrations directory:
+```bash
+mkdir src/db/migrations
+```
+
+3. Add script to package.json:
+```json
+{
+  "scripts": {
+    "migrate": "kysely-migration-cli --database-url postgresql://user:password@localhost:5432/dbname --migrations src/db/migrations"
+Example migration:
+```typescript
+// src/db/migrations/001_initial.ts
+import { Kysely } from 'kysely'
+
+export async function up(db: Kysely<any>) {
+  await db.schema
+    .createTable('users')
+    .addColumn('id', 'serial', col => col.primaryKey())
+    .addColumn('name', 'varchar', col => col.notNull())
+    .execute()
+}
+
+export async function down(db: Kysely<any>) {
+  await db.schema.dropTable('users').execute()
+}
+```
+
+Run with:
+```bash
+npm run migrate up
+```
+  }
+}
+```
+
+4.
+
+I would also like to generate the kysely db client from a running database. How would I do that?
+
+Install kysely-codegen:
+
+```bash
+npm i -D kysely-codegen
+```           
+  "scripts": {
+
+Add script to package.json:
+`
+    "generate-types`": "kysely-codegen --url postgresql://user:password@localhost:5432/dbname --out-file src/db/types.ts"
+  `json migrations:
+```bash
+npm run generate-types}
+```
+
+This creates typed interfaces for your database schema.
+}
+```
+
+Run after
+{
+
+I also need a gitignore for this project
+                  
+Here's a basic .gitignore:
+
+```
+node_modules/
+dist/
+
+# Env
+.env
+.env.*
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+```
+# Dependencies
+
+Can you give me a .env file to provide url's to the postgres and redis db's? Assume the express app will be run directly, and redis and postgres will be run with the docker compose
+
+Here's a .env file for your project:
+
+.env
+DATABASE_URL=postgresql://user:password@localhost:5432/dbname
+REDIS_URL=redis://localhost:6379
+
+# Note: When running the app directly and databases via Docker, use 'localhost'
+# If everything is dockerized, you'd use the service names instead (e.g., 'postgres' instead of 'localhost')
+
+PORT=3000
+
+I'd also like to use zod to validate and access all environment variables. Can you help me with this?
+
+1. Install zod:
+```bash
+npm i zod
+```
+
+2. Create src/config.ts:
+```typescript
+import { z } from 'zod'
+
+const envSchema = z.object({
+  DATABASE_URL: z.string().url(),
+  REDIS_URL: z.string().url(),
+  PORT: z.string().transform(Number).pipe(z.number().positive())
+})
+
+const env = envSchema.parse(process.env) in app:
+```typescript
+import env from './config'
+
+app.listen(env.PORT)
+```
+
+Remember to:
+1. Add `dotenv/config` import at entry point
+2. Add .env to .gitignore
+
+export default env
+```
+
+3. Use
+
+Do I need to do anything to make the vars in .env visible? I'm getting errors like:
+ZodError: [
+  {
+    "code": "invalid_type",
+    "expected": "string",
+    "received": "undefined",
+    "path": [
+      "DATABASE_URL"
+    ],
+    "message": "Required"
+  },
+
+Yes. Install and import dotenv:
+
+```bash
+npm i dotenv
+```
+
+At the very top of your entry file (before any other imports):
+```typescript
+import 'dotenv/config'
+```
+
+Or if using require:
+```typescript
+require('dotenv').config()
+```
+
+This loads the .env file variables into process.env.
