@@ -7,6 +7,7 @@ import { findUserByEmailOrUsername, createUser, findUserByEmail } from '../../db
 import { createRefreshToken, findRefreshToken, revokeRefreshToken, revokeAllUserRefreshTokens } from '../../db/refresh-tokens';
 import { jwtConfig } from '../../config/jwt';
 import { authenticate, AuthRequest } from '../../middleware/auth';
+import { registry } from '../../utils/openapi';
 
 const router = Router();
 
@@ -48,6 +49,48 @@ function getExpirationDate(): Date {
 }
 
 // POST /auth/register
+registry.registerPath({
+  method: 'post',
+  path: '/auth/register',
+  tags: ['auth'],
+  summary: 'Register a new user account',
+  request: {body: {content: {'application/json': {schema: registerSchema}}}},
+  responses: {
+    '201': {
+      description: 'User registered successfully',
+      content: {
+        'application/json': {
+          schema: z.object({
+            username: z.string(),
+            email: z.string(),
+            accessToken: z.string(),
+            refreshToken: z.string(),
+          }).openapi('RegisterResponse'),
+        },
+      },
+    },
+    '400': {
+        description: 'Bad Request',
+        content: {
+            'application/json': {
+                schema: z.object({
+                    error: z.string(),
+                }).openapi('RegisterErrorResponse'),
+            },
+        },
+    },
+    '500': {
+        description: 'Internal Server Error',
+        content: {
+            'application/json': {
+                schema: z.object({
+                    error: z.string(),
+                }).openapi('RegisterInternalServerErrorResponse'),
+            },
+        },
+    },
+  },
+});
 const registerHandler: RequestHandler<{}, {}, RegisterBody> = async (req, res): Promise<void> => {
   try {
     const { username, email, password } = registerSchema.parse(req.body);
@@ -88,10 +131,8 @@ const registerHandler: RequestHandler<{}, {}, RegisterBody> = async (req, res): 
       expires_at: getExpirationDate(),
     });
 
-    // Don't send password hash in response
-    const { password_hash, ...userWithoutPassword } = user;
     res.status(201).json({
-      user: userWithoutPassword,
+      user,
       ...tokens,
     });
   } catch (error) {
@@ -105,6 +146,59 @@ const registerHandler: RequestHandler<{}, {}, RegisterBody> = async (req, res): 
 };
 
 // POST /auth/login
+registry.registerPath({
+  method: 'post',
+  path: '/auth/login',
+  tags: ['auth'],
+  summary: 'Login with email and password',
+  request: {
+    body: {
+      content: {
+        'application/json': {
+          schema: loginSchema
+        }
+      }
+    }
+  },
+  responses: {
+    '200': {
+      description: 'Login successful',
+      content: {
+        'application/json': {
+          schema: z.object({
+            user: z.object({
+              id: z.string(),
+              username: z.string(),
+              email: z.string(),
+            }),
+            accessToken: z.string(),
+            refreshToken: z.string(),
+          }).openapi('LoginResponse'),
+        },
+      },
+    },
+    '401': {
+      description: 'Invalid credentials',
+      content: {
+        'application/json': {
+          schema: z.object({
+            error: z.string(),
+          }).openapi('LoginErrorResponse'),
+        },
+      },
+    },
+    '500': {
+      description: 'Internal Server Error',
+      content: {
+        'application/json': {
+          schema: z.object({
+            error: z.string(),
+          }).openapi('LoginInternalServerErrorResponse'),
+        },
+      },
+    },
+  },
+});
 const loginHandler: RequestHandler<{}, {}, LoginBody> = async (req, res): Promise<void> => {
   try {
     const { email, password } = loginSchema.parse(req.body);
@@ -150,6 +244,54 @@ const loginHandler: RequestHandler<{}, {}, LoginBody> = async (req, res): Promis
 };
 
 // POST /auth/refresh
+registry.registerPath({
+  method: 'post',
+  path: '/auth/refresh',
+  tags: ['auth'],
+  summary: 'Refresh access token using refresh token',
+  request: {
+    body: {
+      content: {
+        'application/json': {
+          schema: refreshSchema
+        }
+      }
+    }
+  },
+  responses: {
+    '200': {
+      description: 'Token refresh successful',
+      content: {
+        'application/json': {
+          schema: z.object({
+            accessToken: z.string(),
+            refreshToken: z.string(),
+          }).openapi('RefreshResponse'),
+        },
+      },
+    },
+    '401': {
+      description: 'Invalid refresh token',
+      content: {
+        'application/json': {
+          schema: z.object({
+            error: z.string(),
+          }).openapi('RefreshErrorResponse'),
+        },
+      },
+    },
+    '500': {
+      description: 'Internal Server Error',
+      content: {
+        'application/json': {
+          schema: z.object({
+            error: z.string(),
+          }).openapi('RefreshInternalServerErrorResponse'),
+        },
+      },
+    },
+  },
+});
 const refreshHandler: RequestHandler<{}, {}, RefreshBody> = async (req, res): Promise<void> => {
   try {
     const { refreshToken } = refreshSchema.parse(req.body);
@@ -193,6 +335,45 @@ const refreshHandler: RequestHandler<{}, {}, RefreshBody> = async (req, res): Pr
 };
 
 // POST /auth/logout
+registry.registerPath({
+  method: 'post',
+  path: '/auth/logout',
+  tags: ['auth'],
+  summary: 'Logout and revoke refresh token',
+  security: [{ bearerAuth: [] }],
+  responses: {
+    '200': {
+      description: 'Logout successful',
+      content: {
+        'application/json': {
+          schema: z.object({
+            message: z.string(),
+          }).openapi('LogoutResponse'),
+        },
+      },
+    },
+    '401': {
+      description: 'Not authenticated',
+      content: {
+        'application/json': {
+          schema: z.object({
+            error: z.string(),
+          }).openapi('LogoutErrorResponse'),
+        },
+      },
+    },
+    '500': {
+      description: 'Internal Server Error',
+      content: {
+        'application/json': {
+          schema: z.object({
+            error: z.string(),
+          }).openapi('LogoutInternalServerErrorResponse'),
+        },
+      },
+    },
+  },
+});
 const logoutHandler: RequestHandler = async (req: AuthRequest, res): Promise<void> => {
   try {
     const authHeader = req.headers.authorization;
@@ -208,6 +389,45 @@ const logoutHandler: RequestHandler = async (req: AuthRequest, res): Promise<voi
 };
 
 // POST /auth/logout-all
+registry.registerPath({
+  method: 'post',
+  path: '/auth/logout-all',
+  tags: ['auth'],
+  summary: 'Logout from all devices and revoke all refresh tokens',
+  security: [{ bearerAuth: [] }],
+  responses: {
+    '200': {
+      description: 'Logged out from all devices',
+      content: {
+        'application/json': {
+          schema: z.object({
+            message: z.string(),
+          }).openapi('LogoutAllResponse'),
+        },
+      },
+    },
+    '401': {
+      description: 'Not authenticated',
+      content: {
+        'application/json': {
+          schema: z.object({
+            error: z.string(),
+          }).openapi('LogoutAllErrorResponse'),
+        },
+      },
+    },
+    '500': {
+      description: 'Internal Server Error',
+      content: {
+        'application/json': {
+          schema: z.object({
+            error: z.string(),
+          }).openapi('LogoutAllInternalServerErrorResponse'),
+        },
+      },
+    },
+  },
+});
 const logoutAllHandler: RequestHandler = async (req: AuthRequest, res): Promise<void> => {
   try {
     if (!req.user?.id) {
