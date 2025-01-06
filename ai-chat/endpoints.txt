@@ -1,0 +1,40 @@
+I'm making a slack clone. For database design, see: {@dingllmIncludeFile /Users/wilbertfeldman/Documents/gauntlet/slack/slack-backend/src/db/types.ts}
+I'm trying to determine what endpoints I need. Can you give me an initial list?
+
+Here's a basic list of endpoints you'll likely need:
+
+Users:
+- POST /auth/login
+- POST /auth/register
+- GET /users/me
+- PUT /users/me
+
+Workspaces:
+- POST /workspaces
+- GET /workspaces
+- GET /workspaces/:id
+- PUT /workspaces/:id
+- GET /workspaces/:id/members
+- POST /workspaces/:id/members
+
+Channels:
+- POST /workspaces/:id/channels
+- GET /workspaces/:id/channels
+- GET /channels/:id
+- PUT /channels/:id
+- GET /channels/:id/members
+- POST /channels/:id/members
+
+Messages:
+- POST /channels/:id/messages
+- GET /channels/:id/messages
+- PUT /messages/:id
+- DELETE /messages/:id
+- POST /messages/:id/reactions
+
+Direct Messages:
+- POST /dm
+- GET /dm/:channelId/messages
+- PUT /dm/:messageId
+
+Need anything specific about any of these?
