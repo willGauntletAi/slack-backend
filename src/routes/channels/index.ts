@@ -153,6 +153,13 @@ registry.registerPath({
       schema: { type: 'string' },
       description: 'Search term to filter channels by name (case-insensitive)',
     },
+    {
+      name: 'exclude_mine',
+      in: 'query',
+      required: false,
+      schema: { type: 'boolean' },
+      description: 'If true, only returns channels the user is not a member of',
+    },
   ],
   responses: {
     '200': {
@@ -213,7 +220,11 @@ const listChannelsHandler: RequestHandler<{ id: string }> = async (req: AuthRequ
     const searchParam = req.query.search;
     const search = typeof searchParam === 'string' ? searchParam : undefined;
 
-    const channels = await listChannelsInWorkspace(req.params.id, req.user.id, search);
+    // Validate exclude_mine parameter
+    const excludeMineParam = req.query.exclude_mine;
+    const excludeMine = excludeMineParam === 'true';
+
+    const channels = await listChannelsInWorkspace(req.params.id, req.user.id, search, excludeMine);
     res.json(channels);
   } catch (error) {
     if (error instanceof Error && error.message === 'Not a member of the workspace') {

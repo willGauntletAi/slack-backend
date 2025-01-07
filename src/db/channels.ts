@@ -62,7 +62,8 @@ export async function createChannel(workspaceId: string, userId: string, data: C
 export async function listChannelsInWorkspace(
   workspaceId: string, 
   userId: string,
-  search?: string
+  search?: string,
+  excludeMine?: boolean
 ) {
   // Check if user is a member of the workspace
   const isMember = await isWorkspaceMember(workspaceId, userId);
@@ -82,13 +83,27 @@ export async function listChannelsInWorkspace(
     .where((eb) =>
       eb.or([
         eb('c.is_private', '=', false),
-        eb('cm.user_id', 'is not', null)
+        eb.and([
+          eb('cm.user_id', 'is not', null),
+          eb('cm.deleted_at', 'is', null)
+        ])
       ])
-    );
+    )
+    .limit(50);
 
   // Add case-insensitive search if search parameter is provided
   if (search) {
     query = query.where('c.name', 'ilike', `%${search}%`);
+  }
+
+  // Exclude channels where the user is a member if excludeMine is true
+  if (excludeMine) {
+    query = query.where((eb) =>
+      eb.or([
+        eb('cm.user_id', 'is', null),
+        eb('cm.deleted_at', 'is not', null)
+      ])
+    );
   }
 
   return await query
@@ -118,6 +133,7 @@ export async function isChannelMember(channelId: string, userId: string) {
     .selectFrom('channel_members')
     .where('channel_id', '=', channelId)
     .where('user_id', '=', userId)
+    .where('deleted_at', 'is', null)
     .selectAll()
     .executeTakeFirst();
 
@@ -162,14 +178,8 @@ export async function addChannelMember(channelId: string, userId: string, addedB
     .select('user_id')
     .execute();
 
-  if (workspaceMembers.length !== 2) {
+  if (workspaceMembers.length !== 2 && userId !== addedByUserId) {
     throw new Error('Both users must be members of the workspace');
-  }
-
-  // Check if the user is already a member
-  const isMember = await isChannelMember(channelId, userId);
-  if (isMember) {
-    throw new Error('User is already a member of this channel');
   }
 
   // For private channels, check if the adder is a member
@@ -182,6 +192,32 @@ export async function addChannelMember(channelId: string, userId: string, addedB
 
   const now = new Date().toISOString();
 
+  // Check if there's an existing membership record
+  const existingMembership = await db
+    .selectFrom('channel_members')
+    .where('channel_id', '=', channelId)
+    .where('user_id', '=', userId)
+    .selectAll()
+    .executeTakeFirst();
+
+  if (existingMembership) {
+    if (existingMembership.deleted_at === null) {
+      throw new Error('User is already a member of this channel');
+    }
+
+    // Reactivate the membership
+    return await db
+      .updateTable('channel_members')
+      .set({
+        deleted_at: null,
+        joined_at: now,
+      })
+      .where('channel_id', '=', channelId)
+      .where('user_id', '=', userId)
+      .execute();
+  }
+
+  // Create new membership
   return await db
     .insertInto('channel_members')
     .values({
