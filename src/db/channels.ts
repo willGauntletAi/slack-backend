@@ -215,4 +215,29 @@ export async function removeChannelMember(channelId: string, userId: string, rem
     .where('channel_id', '=', channelId)
     .where('user_id', '=', userId)
     .execute();
+}
+
+// Get all channels a user is a member of
+export async function listUserChannels(userId: string) {
+  return await db
+    .selectFrom('channels as c')
+    .innerJoin('channel_members as cm', (join) =>
+      join
+        .onRef('c.id', '=', 'cm.channel_id')
+        .on('cm.user_id', '=', userId)
+        .on('cm.deleted_at', 'is', null)
+    )
+    .innerJoin('workspaces as w', 'w.id', 'c.workspace_id')
+    .where('c.deleted_at', 'is', null)
+    .where('w.deleted_at', 'is', null)
+    .select([
+      'c.id',
+      'c.name',
+      'c.is_private',
+      'c.created_at',
+      'c.updated_at',
+      'c.workspace_id',
+      'w.name as workspace_name',
+    ])
+    .execute();
 } 

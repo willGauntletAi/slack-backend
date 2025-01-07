@@ -3,7 +3,7 @@ import { z } from 'zod';
 import type { RequestHandler } from 'express';
 import { authenticate, AuthRequest } from '../../middleware/auth';
 import { registry } from '../../utils/openapi';
-import { createChannel, listChannelsInWorkspace, updateChannel, addChannelMember, removeChannelMember, getChannelById } from '../../db/channels';
+import { createChannel, listChannelsInWorkspace, updateChannel, addChannelMember, removeChannelMember, getChannelById, listUserChannels } from '../../db/channels';
 import { findUserById } from '../../db/users';
 
 const router = Router();
@@ -221,6 +221,58 @@ const listChannelsHandler: RequestHandler<{ id: string }> = async (req: AuthRequ
       return;
     }
     console.error('List channels error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+// GET /channel/me - List all channels the user is a member of
+registry.registerPath({
+  method: 'get',
+  path: '/channel/me',
+  tags: ['channels'],
+  summary: 'List all channels the user is a member of',
+  security: [{ bearerAuth: [] }],
+  responses: {
+    '200': {
+      description: 'List of channels retrieved successfully',
+      content: {
+        'application/json': {
+          schema: z.array(z.object({
+            id: z.string(),
+            name: z.string(),
+            is_private: z.boolean(),
+            created_at: z.string(),
+            updated_at: z.string(),
+            workspace_id: z.string(),
+            workspace_name: z.string(),
+          })).openapi('ListUserChannelsResponse'),
+        },
+      },
+    },
+    '401': {
+      description: 'Not authenticated',
+      content: {
+        'application/json': {
+          schema: z.object({
+            error: z.string(),
+          }),
+        },
+      },
+    },
+  },
+});
+
+const listUserChannelsHandler: RequestHandler = async (req: AuthRequest, res) => {
+  try {
+    if (!req.user?.id) {
+      res.status(401).json({ error: 'Not authenticated' });
+      return;
+    }
+
+    const channels = await listUserChannels(req.user.id);
+    res.json(channels);
+  } catch (error) {
+    console.error('List user channels error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 };
@@ -553,6 +605,7 @@ const removeChannelMemberHandler: RequestHandler<{ id: string; userId: string }>
 
 router.post('/workspace/:id', authenticate, createChannelHandler);
 router.get('/workspace/:id', authenticate, listChannelsHandler);
+router.get('/me', authenticate, listUserChannelsHandler);
 router.put('/:id', authenticate, updateChannelHandler);
 router.post('/:id/member/:userId', authenticate, addChannelMemberHandler);
 router.delete('/:id/member/:userId', authenticate, removeChannelMemberHandler);
