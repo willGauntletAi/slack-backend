@@ -37,7 +37,7 @@ export async function createUser(data: CreateUserData) {
   return db
     .insertInto('users')
     .values(data)
-    .returningAll()
+    .returning(['id', 'email', 'username', 'created_at', 'updated_at'])
     .executeTakeFirst();
 }
 

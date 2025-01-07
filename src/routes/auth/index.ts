@@ -61,8 +61,13 @@ registry.registerPath({
       content: {
         'application/json': {
           schema: z.object({
-            username: z.string(),
-            email: z.string(),
+            user: z.object({
+              id: z.string(),
+              username: z.string(),
+              email: z.string(),
+              created_at: z.string(),
+              updated_at: z.string(),
+            }),
             accessToken: z.string(),
             refreshToken: z.string(),
           }).openapi('RegisterResponse'),

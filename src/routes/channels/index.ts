@@ -615,9 +615,9 @@ const removeChannelMemberHandler: RequestHandler<{ id: string; userId: string }>
   }
 };
 
+router.get('/me', authenticate, listUserChannelsHandler);
 router.post('/workspace/:id', authenticate, createChannelHandler);
 router.get('/workspace/:id', authenticate, listChannelsHandler);
-router.get('/me', authenticate, listUserChannelsHandler);
 router.put('/:id', authenticate, updateChannelHandler);
 router.post('/:id/member/:userId', authenticate, addChannelMemberHandler);
 router.delete('/:id/member/:userId', authenticate, removeChannelMemberHandler);
