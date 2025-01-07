@@ -3,30 +3,9 @@ import { z } from 'zod';
 import type { RequestHandler } from 'express';
 import { authenticate, AuthRequest } from '../../middleware/auth';
 import { registry } from '../../utils/openapi';
+import { createMessage, listChannelMessages, updateMessage, deleteMessage, createMessageSchema, updateMessageSchema } from '../../db/messages';
 
 const router = Router();
-
-// Schema for creating a message
-const createMessageSchema = z.object({
-  content: z.string().min(1),
-  parent_id: z.string().optional(), // For thread replies
-});
-
-type CreateMessageBody = z.infer<typeof createMessageSchema>;
-
-// Schema for updating a message
-const updateMessageSchema = z.object({
-  content: z.string().min(1),
-});
-
-type UpdateMessageBody = z.infer<typeof updateMessageSchema>;
-
-// Schema for adding a reaction
-const addReactionSchema = z.object({
-  emoji: z.string().min(1),
-});
-
-type AddReactionBody = z.infer<typeof addReactionSchema>;
 
 // POST /message/channel/:id - Create a message in a channel
 registry.registerPath({
@@ -61,10 +40,11 @@ registry.registerPath({
           schema: z.object({
             id: z.string(),
             content: z.string(),
-            parent_id: z.string().optional(),
-            user_id: z.string(),
+            parent_id: z.string().nullable(),
             created_at: z.string(),
             updated_at: z.string(),
+            user_id: z.string(),
+            channel_id: z.string(),
           }).openapi('CreateMessageResponse'),
         },
       },
@@ -99,35 +79,39 @@ registry.registerPath({
         },
       },
     },
-    '404': {
-      description: 'Channel not found',
-      content: {
-        'application/json': {
-          schema: z.object({
-            error: z.string(),
-          }),
-        },
-      },
-    },
   },
 });
 
-const createMessageHandler: RequestHandler<{ id: string }, {}, CreateMessageBody> = async (req: AuthRequest, res) => {
+const createMessageHandler: RequestHandler<{ id: string }, {}, z.infer<typeof createMessageSchema>> = async (req: AuthRequest, res) => {
   try {
-    // TODO: Implement message creation
-    res.status(501).json({ error: 'Not implemented' });
+    if (!req.user?.id) {
+      res.status(401).json({ error: 'Not authenticated' });
+      return;
+    }
+
+    const data = createMessageSchema.parse(req.body);
+    const message = await createMessage(req.params.id, req.user.id, data);
+    res.status(201).json(message);
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      res.status(400).json({ error: error.errors });
+      return;
+    }
+    if (error instanceof Error && error.message === 'Not a member of this channel') {
+      res.status(403).json({ error: error.message });
+      return;
+    }
     console.error('Create message error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 };
 
-// GET /message/channel/:id - Get messages from a channel
+// GET /message/channel/:id - List messages in a channel
 registry.registerPath({
   method: 'get',
   path: '/message/channel/{id}',
   tags: ['messages'],
-  summary: 'Get messages from a channel',
+  summary: 'List messages in a channel',
   security: [{ bearerAuth: [] }],
   parameters: [
     {
@@ -138,37 +122,34 @@ registry.registerPath({
       description: 'Channel ID',
     },
     {
+      name: 'limit',
+      in: 'query',
+      required: false,
+      schema: { type: 'number', default: 50 },
+      description: 'Number of messages to return',
+    },
+    {
       name: 'before',
       in: 'query',
       required: false,
       schema: { type: 'string' },
-      description: 'Get messages before this message id',
-    },
-    {
-      name: 'limit',
-      in: 'query',
-      required: false,
-      schema: { type: 'integer', minimum: 1, maximum: 100, default: 50 },
-      description: 'Maximum number of messages to return',
+      description: 'Message ID to fetch messages before',
     },
   ],
   responses: {
     '200': {
-      description: 'Messages retrieved successfully',
+      description: 'List of messages retrieved successfully',
       content: {
         'application/json': {
           schema: z.array(z.object({
             id: z.string(),
             content: z.string(),
-            parent_id: z.string().optional(),
-            user_id: z.string(),
+            parent_id: z.string().nullable(),
             created_at: z.string(),
             updated_at: z.string(),
-            reactions: z.array(z.object({
-              emoji: z.string(),
-              user_id: z.string(),
-            })),
-          })).openapi('GetMessagesResponse'),
+            user_id: z.string(),
+            username: z.string(),
+          })).openapi('ListMessagesResponse'),
         },
       },
     },
@@ -192,25 +173,27 @@ registry.registerPath({
         },
       },
     },
-    '404': {
-      description: 'Channel not found',
-      content: {
-        'application/json': {
-          schema: z.object({
-            error: z.string(),
-          }),
-        },
-      },
-    },
   },
 });
 
-const getMessagesHandler: RequestHandler<{ id: string }> = async (req: AuthRequest, res) => {
+const listMessagesHandler: RequestHandler<{ id: string }> = async (req: AuthRequest, res) => {
   try {
-    // TODO: Implement message retrieval
-    res.status(501).json({ error: 'Not implemented' });
+    if (!req.user?.id) {
+      res.status(401).json({ error: 'Not authenticated' });
+      return;
+    }
+
+    const limit = req.query.limit ? parseInt(req.query.limit as string) : 50;
+    const before = typeof req.query.before === 'string' ? req.query.before : undefined;
+
+    const messages = await listChannelMessages(req.params.id, req.user.id, limit, before);
+    res.json(messages);
   } catch (error) {
-    console.error('Get messages error:', error);
+    if (error instanceof Error && error.message === 'Not a member of this channel') {
+      res.status(403).json({ error: error.message });
+      return;
+    }
+    console.error('List messages error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 };
@@ -248,10 +231,11 @@ registry.registerPath({
           schema: z.object({
             id: z.string(),
             content: z.string(),
-            parent_id: z.string().optional(),
-            user_id: z.string(),
+            parent_id: z.string().nullable(),
             created_at: z.string(),
             updated_at: z.string(),
+            user_id: z.string(),
+            channel_id: z.string(),
           }).openapi('UpdateMessageResponse'),
         },
       },
@@ -277,7 +261,7 @@ registry.registerPath({
       },
     },
     '403': {
-      description: 'Not authorized to update message',
+      description: 'Not authorized to update this message',
       content: {
         'application/json': {
           schema: z.object({
@@ -299,11 +283,35 @@ registry.registerPath({
   },
 });
 
-const updateMessageHandler: RequestHandler<{ id: string }, {}, UpdateMessageBody> = async (req: AuthRequest, res) => {
+const updateMessageHandler: RequestHandler<{ id: string }, {}, z.infer<typeof updateMessageSchema>> = async (req: AuthRequest, res) => {
   try {
-    // TODO: Implement message update
-    res.status(501).json({ error: 'Not implemented' });
+    if (!req.user?.id) {
+      res.status(401).json({ error: 'Not authenticated' });
+      return;
+    }
+
+    const data = updateMessageSchema.parse(req.body);
+    const message = await updateMessage(req.params.id, req.user.id, data);
+    if (!message) {
+      res.status(404).json({ error: 'Message not found' });
+      return;
+    }
+    res.json(message);
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      res.status(400).json({ error: error.errors });
+      return;
+    }
+    if (error instanceof Error) {
+      switch (error.message) {
+        case 'Message not found':
+          res.status(404).json({ error: error.message });
+          return;
+        case 'Not authorized to update this message':
+          res.status(403).json({ error: error.message });
+          return;
+      }
+    }
     console.error('Update message error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
@@ -332,7 +340,7 @@ registry.registerPath({
         'application/json': {
           schema: z.object({
             message: z.string(),
-          }),
+          }).openapi('DeleteMessageResponse'),
         },
       },
     },
@@ -347,7 +355,7 @@ registry.registerPath({
       },
     },
     '403': {
-      description: 'Not authorized to delete message',
+      description: 'Not authorized to delete this message',
       content: {
         'application/json': {
           schema: z.object({
@@ -371,109 +379,32 @@ registry.registerPath({
 
 const deleteMessageHandler: RequestHandler<{ id: string }> = async (req: AuthRequest, res) => {
   try {
-    // TODO: Implement message deletion
-    res.status(501).json({ error: 'Not implemented' });
+    if (!req.user?.id) {
+      res.status(401).json({ error: 'Not authenticated' });
+      return;
+    }
+
+    await deleteMessage(req.params.id, req.user.id);
+    res.json({ message: 'Message deleted successfully' });
   } catch (error) {
+    if (error instanceof Error) {
+      switch (error.message) {
+        case 'Message not found':
+          res.status(404).json({ error: error.message });
+          return;
+        case 'Not authorized to delete this message':
+          res.status(403).json({ error: error.message });
+          return;
+      }
+    }
     console.error('Delete message error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 };
 
-// POST /message/:id/reaction - Add a reaction to a message
-registry.registerPath({
-  method: 'post',
-  path: '/message/{id}/reaction',
-  tags: ['messages'],
-  summary: 'Add a reaction to a message',
-  security: [{ bearerAuth: [] }],
-  parameters: [
-    {
-      name: 'id',
-      in: 'path',
-      required: true,
-      schema: { type: 'string' },
-      description: 'Message ID',
-    },
-  ],
-  request: {
-    body: {
-      content: {
-        'application/json': {
-          schema: addReactionSchema,
-        },
-      },
-    },
-  },
-  responses: {
-    '200': {
-      description: 'Reaction added successfully',
-      content: {
-        'application/json': {
-          schema: z.object({
-            message_id: z.string(),
-            emoji: z.string(),
-            user_id: z.string(),
-          }).openapi('AddReactionResponse'),
-        },
-      },
-    },
-    '400': {
-      description: 'Invalid request body',
-      content: {
-        'application/json': {
-          schema: z.object({
-            error: z.string(),
-          }),
-        },
-      },
-    },
-    '401': {
-      description: 'Not authenticated',
-      content: {
-        'application/json': {
-          schema: z.object({
-            error: z.string(),
-          }),
-        },
-      },
-    },
-    '403': {
-      description: 'Not a member of the channel',
-      content: {
-        'application/json': {
-          schema: z.object({
-            error: z.string(),
-          }),
-        },
-      },
-    },
-    '404': {
-      description: 'Message not found',
-      content: {
-        'application/json': {
-          schema: z.object({
-            error: z.string(),
-          }),
-        },
-      },
-    },
-  },
-});
-
-const addReactionHandler: RequestHandler<{ id: string }, {}, AddReactionBody> = async (req: AuthRequest, res) => {
-  try {
-    // TODO: Implement adding reaction
-    res.status(501).json({ error: 'Not implemented' });
-  } catch (error) {
-    console.error('Add reaction error:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-};
-
 router.post('/channel/:id', authenticate, createMessageHandler);
-router.get('/channel/:id', authenticate, getMessagesHandler);
+router.get('/channel/:id', authenticate, listMessagesHandler);
 router.put('/:id', authenticate, updateMessageHandler);
 router.delete('/:id', authenticate, deleteMessageHandler);
-router.post('/:id/reaction', authenticate, addReactionHandler);
 
 export default router; 
