@@ -146,6 +146,13 @@ registry.registerPath({
       schema: { type: 'string' },
       description: 'Workspace ID',
     },
+    {
+      name: 'search',
+      in: 'query',
+      required: false,
+      schema: { type: 'string' },
+      description: 'Search term to filter channels by name (case-insensitive)',
+    },
   ],
   responses: {
     '200': {
@@ -202,7 +209,11 @@ const listChannelsHandler: RequestHandler<{ id: string }> = async (req: AuthRequ
       return;
     }
 
-    const channels = await listChannelsInWorkspace(req.params.id, req.user.id);
+    // Validate search parameter
+    const searchParam = req.query.search;
+    const search = typeof searchParam === 'string' ? searchParam : undefined;
+
+    const channels = await listChannelsInWorkspace(req.params.id, req.user.id, search);
     res.json(channels);
   } catch (error) {
     if (error instanceof Error && error.message === 'Not a member of the workspace') {

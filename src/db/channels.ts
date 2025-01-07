@@ -1,6 +1,7 @@
 import { db } from './index';
 import { z } from 'zod';
 import { isWorkspaceMember } from './workspaces';
+import { sql } from 'kysely';
 
 // Schema for creating a channel
 export const createChannelSchema = z.object({
@@ -58,15 +59,18 @@ export async function createChannel(workspaceId: string, userId: string, data: C
 }
 
 // List channels in a workspace
-export async function listChannelsInWorkspace(workspaceId: string, userId: string) {
+export async function listChannelsInWorkspace(
+  workspaceId: string, 
+  userId: string,
+  search?: string
+) {
   // Check if user is a member of the workspace
   const isMember = await isWorkspaceMember(workspaceId, userId);
   if (!isMember) {
     throw new Error('Not a member of the workspace');
   }
 
-  // Get all public channels and private channels where the user is a member
-  return await db
+  let query = db
     .selectFrom('channels as c')
     .leftJoin('channel_members as cm', (join) =>
       join
@@ -80,7 +84,14 @@ export async function listChannelsInWorkspace(workspaceId: string, userId: strin
         eb('c.is_private', '=', false),
         eb('cm.user_id', 'is not', null)
       ])
-    )
+    );
+
+  // Add case-insensitive search if search parameter is provided
+  if (search) {
+    query = query.where('c.name', 'ilike', `%${search}%`);
+  }
+
+  return await query
     .select([
       'c.id',
       'c.name',
