@@ -1,71 +1,38 @@
+import 'dotenv/config';
 import express from "express";
 import cors from "cors";
-import "dotenv/config";
-import { env } from "./env";
-import { extendZodWithOpenApi } from "@asteasolutions/zod-to-openapi";
-import { z } from "zod";
-import swaggerUi from 'swagger-ui-express';
-import { generateOpenApiDocument } from './utils/openapi';
-import { createServer } from 'http';
-import { WebSocketServer } from 'ws';
-
-extendZodWithOpenApi(z);
-
-// Import routes
-import authRoutes from "./routes/auth";
-import userRoutes from "./routes/users";
-import workspaceRoutes from "./routes/workspaces";
-import channelRoutes from "./routes/channels";
-import messageRoutes from "./routes/messages";
-import dmRoutes from "./routes/dm";
+import { createServer } from "http";
+import { WebSocketHandler } from "./websocket/server";
+import { initializeRedis } from "./services/redis";
+import authRouter from "./routes/auth";
+import usersRouter from "./routes/users";
+import workspacesRouter from "./routes/workspaces";
+import channelsRouter from "./routes/channels";
+import messagesRouter from "./routes/messages";
+import dmRouter from "./routes/dm";
 
 const app = express();
-const port = env.PORT;
-
-// Create HTTP server instance
 const server = createServer(app);
 
-// Create WebSocket server instance
-const wss = new WebSocketServer({ server });
+console.log('Initializing WebSocket server');
+const wsHandler = new WebSocketHandler(server);
 
-// WebSocket connection handler
-wss.on('connection', (ws) => {
-  console.log('New WebSocket connection');
-
-  ws.on('message', (message) => {
-    // Handle incoming messages
-    console.log('received: %s', message);
-  });
-
-  ws.on('close', () => {
-    console.log('Client disconnected');
-  });
-});
+console.log('Initializing Redis service in index.ts');
+initializeRedis(wsHandler);
 
 // Middleware
 app.use(cors());
 app.use(express.json());
 
-// Serve OpenAPI documentation
-const openApiDocument = generateOpenApiDocument();
-app.use('/docs', swaggerUi.serve, swaggerUi.setup(openApiDocument));
-
 // Routes
-app.use('/auth', authRoutes);
-app.use('/user', userRoutes);
-app.use('/workspace', workspaceRoutes);
-app.use('/channel', channelRoutes);
-app.use('/message', messageRoutes);
-app.use('/dm', dmRoutes);
+app.use('/auth', authRouter);
+app.use('/user', usersRouter);
+app.use('/workspace', workspacesRouter);
+app.use('/channel', channelsRouter);
+app.use('/message', messagesRouter);
+app.use('/dm', dmRouter);
 
-// Health check endpoint
-app.get("/", (req, res) => {
-  res.json({ status: "ok" });
-});
-
-// Use server.listen instead of app.listen
+const port = process.env.PORT || 3000;
 server.listen(port, () => {
-  console.log(`Server is running on port ${port}`);
-  console.log(`API documentation available at http://localhost:${port}/docs`);
-  console.log(`WebSocket server is running on ws://localhost:${port}`);
+  console.log(`Server running on port ${port}`);
 });

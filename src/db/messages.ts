@@ -51,21 +51,18 @@ export async function createMessage(channelId: string, userId: string, data: Cre
       .select('username')
       .executeTakeFirstOrThrow();
 
-    return { message, username: user.username };
+    return { ...message, username: user.username };
   });
 
   // Publish the new message event
   await publishNewMessage(channelId, {
-    id: result.message.id.toString(),
-    content: result.message.content,
-    parent_id: result.message.parent_id?.toString() || null,
-    created_at: result.message.created_at.toISOString(),
-    updated_at: result.message.updated_at.toISOString(),
-    user_id: result.message.user_id,
-    username: result.username,
+    ...result,
+    parent_id: result.parent_id?.toString() || null,
+    created_at: result.created_at.toISOString(),
+    updated_at: result.updated_at.toISOString(),
   });
 
-  return result.message;
+  return result;
 }
 
 // List messages in a channel
