@@ -232,6 +232,15 @@ registry.registerPath({
   tags: ['channels'],
   summary: 'List all channels the user is a member of',
   security: [{ bearerAuth: [] }],
+  parameters: [
+    {
+      name: 'workspace_id',
+      in: 'query',
+      required: false,
+      schema: { type: 'string' },
+      description: 'Optional workspace ID to filter channels',
+    },
+  ],
   responses: {
     '200': {
       description: 'List of channels retrieved successfully',
@@ -269,7 +278,10 @@ const listUserChannelsHandler: RequestHandler = async (req: AuthRequest, res) =>
       return;
     }
 
-    const channels = await listUserChannels(req.user.id);
+    // Get workspace_id from query params if it exists
+    const workspaceId = typeof req.query.workspace_id === 'string' ? req.query.workspace_id : undefined;
+
+    const channels = await listUserChannels(req.user.id, workspaceId);
     res.json(channels);
   } catch (error) {
     console.error('List user channels error:', error);
