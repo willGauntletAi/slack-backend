@@ -1,7 +1,7 @@
 import { db } from './index';
 import { z } from 'zod';
 import { isChannelMember } from './channels';
-import { publishNewMessage, publishMessageUpdated, publishMessageDeleted } from '../services/redis';
+import { publishNewMessage } from '../services/redis';
 
 // Schema for creating a message
 export const createMessageSchema = z.object({
@@ -165,11 +165,6 @@ export async function deleteMessage(messageId: string, userId: string) {
     .where('id', '=', messageId)
     .returningAll()
     .executeTakeFirst();
-
-  if (deletedMessage) {
-    // Publish the delete event
-    await publishMessageDeleted(deletedMessage.channel_id, deletedMessage.id.toString());
-  }
 
   return deletedMessage;
 } 
