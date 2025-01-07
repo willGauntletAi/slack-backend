@@ -149,6 +149,7 @@ registry.registerPath({
             updated_at: z.string(),
             user_id: z.string(),
             username: z.string(),
+            channel_id: z.string(),
           })).openapi('ListMessagesResponse'),
         },
       },

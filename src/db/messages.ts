@@ -92,6 +92,7 @@ export async function listChannelMessages(
       'm.created_at',
       'm.updated_at',
       'm.user_id',
+      'm.channel_id',
       'u.username',
     ]);
 

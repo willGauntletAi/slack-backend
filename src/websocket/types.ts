@@ -1,6 +1,9 @@
 import { z } from 'zod';
 import { extendZodWithOpenApi } from '@asteasolutions/zod-to-openapi';
 
+// Extend Zod with OpenAPI functionality
+extendZodWithOpenApi(z);
+
 // Client -> Server messages
 export const subscribeMessageSchema = z.object({
   type: z.literal('subscribe'),

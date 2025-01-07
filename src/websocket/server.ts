@@ -159,13 +159,17 @@ export class WebSocketHandler {
   }
 
   public broadcastToChannel(channelId: string, message: ServerMessage) {
+    console.log("broadcasting to channel", channelId);
     const subscribers = this.channelSubscriptions.get(channelId);
     if (subscribers) {
+      console.log("subscribers", subscribers);
       const validatedMessage = serverMessageSchema.safeParse(message);
       if (validatedMessage.success) {
+        console.log("validatedMessage", validatedMessage.data);
         const messageStr = JSON.stringify(validatedMessage.data);
         subscribers.forEach((client) => {
           if (client.readyState === WebSocket.OPEN) {
+            console.log("messageStr", messageStr);
             client.send(messageStr);
           }
         });

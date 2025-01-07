@@ -10,7 +10,9 @@ import workspacesRouter from "./routes/workspaces";
 import channelsRouter from "./routes/channels";
 import messagesRouter from "./routes/messages";
 import dmRouter from "./routes/dm";
-
+import { extendZodWithOpenApi } from '@asteasolutions/zod-to-openapi';
+import { z } from 'zod';
+extendZodWithOpenApi(z);
 const app = express();
 const server = createServer(app);
 
