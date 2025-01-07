@@ -3,13 +3,14 @@ import { z } from 'zod';
 import type { RequestHandler } from 'express';
 import { authenticate, AuthRequest } from '../../middleware/auth';
 import { registry } from '../../utils/openapi';
+import { createWorkspace, listWorkspacesForUser, addWorkspaceMember, getWorkspaceById, isWorkspaceMember } from '../../db/workspaces';
+import { findUserById } from '../../db/users';
 
 const router = Router();
 
 // Schema for creating a workspace
 const createWorkspaceSchema = z.object({
   name: z.string().min(1).max(100),
-  description: z.string().optional(),
 });
 
 type CreateWorkspaceBody = z.infer<typeof createWorkspaceSchema>;
@@ -38,7 +39,6 @@ registry.registerPath({
           schema: z.object({
             id: z.string(),
             name: z.string(),
-            description: z.string().optional(),
             created_at: z.string(),
             updated_at: z.string(),
           }).openapi('CreateWorkspaceResponse'),
@@ -70,9 +70,19 @@ registry.registerPath({
 
 const createWorkspaceHandler: RequestHandler<{}, {}, CreateWorkspaceBody> = async (req: AuthRequest, res) => {
   try {
-    // TODO: Implement workspace creation
-    res.status(501).json({ error: 'Not implemented' });
+    if (!req.user?.id) {
+      res.status(401).json({ error: 'Not authenticated' });
+      return;
+    }
+
+    const data = createWorkspaceSchema.parse(req.body);
+    const workspace = await createWorkspace(req.user.id, data);
+    res.status(201).json(workspace);
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      res.status(400).json({ error: error.errors });
+      return;
+    }
     console.error('Create workspace error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
@@ -93,9 +103,9 @@ registry.registerPath({
           schema: z.array(z.object({
             id: z.string(),
             name: z.string(),
-            description: z.string().optional(),
             created_at: z.string(),
             updated_at: z.string(),
+            role: z.string(),
           })).openapi('ListWorkspacesResponse'),
         },
       },
@@ -115,8 +125,13 @@ registry.registerPath({
 
 const listWorkspacesHandler: RequestHandler = async (req: AuthRequest, res) => {
   try {
-    // TODO: Implement workspace listing
-    res.status(501).json({ error: 'Not implemented' });
+    if (!req.user?.id) {
+      res.status(401).json({ error: 'Not authenticated' });
+      return;
+    }
+
+    const workspaces = await listWorkspacesForUser(req.user.id);
+    res.json(workspaces);
   } catch (error) {
     console.error('List workspaces error:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -192,9 +207,38 @@ registry.registerPath({
 
 const addWorkspaceMemberHandler: RequestHandler<{ id: string; userId: string }> = async (req: AuthRequest, res) => {
   try {
-    // TODO: Implement adding workspace member
-    res.status(501).json({ error: 'Not implemented' });
+    if (!req.user?.id) {
+      res.status(401).json({ error: 'Not authenticated' });
+      return;
+    }
+
+    const { id: workspaceId, userId } = req.params;
+
+    // Check if workspace exists
+    const workspace = await getWorkspaceById(workspaceId);
+    if (!workspace) {
+      res.status(404).json({ error: 'Workspace not found' });
+      return;
+    }
+
+    // Check if user exists
+    const user = await findUserById(userId);
+    if (!user) {
+      res.status(404).json({ error: 'User not found' });
+      return;
+    }
+
+    await addWorkspaceMember(workspaceId, userId, req.user.id);
+    res.json({ message: 'Member added successfully' });
   } catch (error) {
+    if (error instanceof Error && error.message === 'Not authorized to add members') {
+      res.status(403).json({ error: error.message });
+      return;
+    }
+    if (error instanceof Error && error.message === 'User is already a member of this workspace') {
+      res.status(400).json({ error: error.message });
+      return;
+    }
     console.error('Add workspace member error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
