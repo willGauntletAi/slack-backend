@@ -27,4 +27,21 @@ const openApiJson = JSON.stringify(openApiDocument, null, 2);
 const outputPath = join(__dirname, '../../slack_frontend/openapi.json');
 writeFileSync(outputPath, openApiJson);
 
+// Also save WebSocket types
+import { clientMessageSchema, serverMessageSchema } from '../src/websocket/types';
+
 console.log(`OpenAPI document saved to ${outputPath}`); 
+
+const wsTypes = {
+  clientMessages: clientMessageSchema,
+  serverMessages: serverMessageSchema
+};
+
+const wsTypesJson = JSON.stringify(wsTypes, null, 2);
+const wsTypesPath = join(__dirname, '../../slack_frontend/ws-types.json');
+writeFileSync(wsTypesPath, wsTypesJson);
+
+console.log(`WebSocket types saved to ${wsTypesPath}`);
+
+
+process.exit(0);

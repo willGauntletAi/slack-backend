@@ -1,19 +1,39 @@
 import Redis from 'ioredis';
-import { config } from '../config/redis';
+import { WebSocketHandler } from '../websocket/server';
+import { NewMessageEvent } from '../websocket/types';
 
-// Create Redis client
-export const redis = new Redis(config.REDIS_URL);
+if (!process.env.REDIS_URL) {
+  throw new Error('REDIS_URL environment variable is required');
+}
 
-// Channel names for pub/sub
-export const CHANNELS = {
-  NEW_MESSAGE: 'new_message',
-  MESSAGE_UPDATED: 'message_updated',
-  MESSAGE_DELETED: 'message_deleted',
-} as const;
+const redis = new Redis(process.env.REDIS_URL);
+const subscriber = new Redis(process.env.REDIS_URL);
 
-// Message types for pub/sub
-export interface NewMessageEvent {
-  type: 'new_message';
+let wsHandler: WebSocketHandler;
+
+export function initializeRedis(websocketHandler: WebSocketHandler) {
+  wsHandler = websocketHandler;
+  setupSubscriptions();
+}
+
+function setupSubscriptions() {
+  subscriber.subscribe('new_message', (err) => {
+    if (err) {
+      console.error('Failed to subscribe to new_message channel:', err);
+      return;
+    }
+  });
+
+  subscriber.on('message', (channel, message) => {
+    switch (channel) {
+      case 'new_message':
+        handleNewMessage(JSON.parse(message));
+        break;
+    }
+  });
+}
+
+interface RedisMessageEvent {
   channelId: string;
   message: {
     id: string;
@@ -26,14 +46,17 @@ export interface NewMessageEvent {
   };
 }
 
-export type MessageEvent = NewMessageEvent;
-
-// Publish functions
-export async function publishNewMessage(channelId: string, message: NewMessageEvent['message']) {
-  const event: NewMessageEvent = {
+function handleNewMessage(event: RedisMessageEvent) {
+  wsHandler.broadcastToChannel(event.channelId, {
     type: 'new_message',
+    channelId: event.channelId,
+    message: event.message,
+  } satisfies NewMessageEvent);
+}
+
+export async function publishNewMessage(channelId: string, message: RedisMessageEvent['message']) {
+  await redis.publish('new_message', JSON.stringify({
     channelId,
     message,
-  };
-  await redis.publish(CHANNELS.NEW_MESSAGE, JSON.stringify(event));
+  }));
 }
