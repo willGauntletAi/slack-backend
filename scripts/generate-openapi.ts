@@ -24,7 +24,7 @@ const openApiDocument = generateOpenApiDocument();
 const openApiJson = JSON.stringify(openApiDocument, null, 2);
 
 // Save to the frontend project
-const outputPath = join(__dirname, '../../slack-frontend/openapi.json');
+const outputPath = join(__dirname, '../../slack_frontend/openapi.json');
 writeFileSync(outputPath, openApiJson);
 
 console.log(`OpenAPI document saved to ${outputPath}`); 

@@ -30,10 +30,10 @@ app.use('/docs', swaggerUi.serve, swaggerUi.setup(openApiDocument));
 
 // Routes
 app.use('/auth', authRoutes);
-app.use('/users', userRoutes);
-app.use('/workspaces', workspaceRoutes);
-app.use('/channels', channelRoutes);
-app.use('/messages', messageRoutes);
+app.use('/user', userRoutes);
+app.use('/workspace', workspaceRoutes);
+app.use('/channel', channelRoutes);
+app.use('/message', messageRoutes);
 app.use('/dm', dmRoutes);
 
 // Health check endpoint
