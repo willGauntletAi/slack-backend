@@ -51,43 +51,32 @@ export async function createDMChannel(userId: string, otherUserIds: string[]) {
         }
     }
 
-    // Check if DM channel already exists with exactly these members
-    const existingChannels = await db
-        .selectFrom('direct_message_members as dm')
-        .where('dm.deleted_at', 'is', null)
-        .groupBy('dm.channel_id')
-        .having(eb =>
-            eb.fn.count('dm.user_id'), '=', userIds.length
+    // Find existing DM channel with exactly these members
+    const existingChannel = await db
+        .selectFrom('direct_message_channels as dmc')
+        .innerJoin('direct_message_members as dmm', 'dmc.id', 'dmm.channel_id')
+        .where('dmm.deleted_at', 'is', null)
+        .where('dmc.deleted_at', 'is', null)
+        .where(eb =>
+            eb.exists(
+                eb.selectFrom('direct_message_members as check_members')
+                    .where('check_members.channel_id', '=', eb.ref('dmc.id'))
+                    .where('check_members.deleted_at', 'is', null)
+                    .where('check_members.user_id', 'in', userIds)
+                    .having(eb => eb.fn.count('check_members.user_id'), '=', userIds.length)
+                    .groupBy('check_members.channel_id')
+            )
         )
-        .select(['dm.channel_id'])
-        .execute();
+        .groupBy('dmc.id')
+        .having(eb => eb.fn.count('dmm.user_id'), '=', userIds.length)
+        .selectAll('dmc')
+        .executeTakeFirst();
 
-    // For each potential channel, check if it has exactly these members
-    for (const { channel_id } of existingChannels) {
-        const members = await db
-            .selectFrom('direct_message_members')
-            .where('channel_id', '=', channel_id)
-            .where('deleted_at', 'is', null)
-            .select('user_id')
-            .execute();
-
-        const memberIds = members.map(m => m.user_id);
-        if (memberIds.length === userIds.length &&
-            userIds.every(id => memberIds.includes(id))) {
-            // Found existing channel with exact members
-            const channel = await db
-                .selectFrom('direct_message_channels')
-                .where('id', '=', channel_id)
-                .selectAll()
-                .executeTakeFirst();
-
-            if (channel) {
-                return channel;
-            }
-        }
+    if (existingChannel) {
+        return existingChannel;
     }
 
-    // Create new DM channel
+    // Create new DM channel if none exists
     const now = new Date().toISOString();
     return await db.transaction().execute(async (trx) => {
         // Create the channel
