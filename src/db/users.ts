@@ -68,13 +68,24 @@ export async function checkUsersShareWorkspace(userId1: string, userId2: string)
 }
 
 // Get users in a workspace
-export async function getWorkspaceUsers(workspaceId: string) {
-  return await db
+export async function getWorkspaceUsers(workspaceId: string, search?: string) {
+  let query = db
     .selectFrom('users as u')
     .innerJoin('workspace_members as wm', 'u.id', 'wm.user_id')
     .where('wm.workspace_id', '=', workspaceId)
     .where('wm.deleted_at', 'is', null)
-    .where('u.deleted_at', 'is', null)
+    .where('u.deleted_at', 'is', null);
+
+  if (search) {
+    query = query.where(eb =>
+      eb.or([
+        eb('u.username', 'ilike', `%${search}%`),
+        eb('u.email', 'ilike', `%${search}%`)
+      ])
+    );
+  }
+
+  return await query
     .select([
       'u.id',
       'u.username',
@@ -86,13 +97,24 @@ export async function getWorkspaceUsers(workspaceId: string) {
 }
 
 // Get users in a channel
-export async function getChannelUsers(channelId: string) {
-  return await db
+export async function getChannelUsers(channelId: string, search?: string) {
+  let query = db
     .selectFrom('users as u')
     .innerJoin('channel_members as cm', 'u.id', 'cm.user_id')
     .where('cm.channel_id', '=', channelId)
     .where('cm.deleted_at', 'is', null)
-    .where('u.deleted_at', 'is', null)
+    .where('u.deleted_at', 'is', null);
+
+  if (search) {
+    query = query.where(eb =>
+      eb.or([
+        eb('u.username', 'ilike', `%${search}%`),
+        eb('u.email', 'ilike', `%${search}%`)
+      ])
+    );
+  }
+
+  return await query
     .select([
       'u.id',
       'u.username',

@@ -297,6 +297,13 @@ registry.registerPath({
       schema: { type: 'string' },
       description: 'Workspace ID',
     },
+    {
+      name: 'search',
+      in: 'query',
+      required: false,
+      schema: { type: 'string' },
+      description: 'Search term to filter users by username or email',
+    },
   ],
   responses: {
     '200': {
@@ -308,6 +315,7 @@ registry.registerPath({
             username: z.string(),
             email: z.string(),
             joined_at: z.string(),
+            role: z.string(),
           })).openapi('GetWorkspaceUsersResponse'),
         },
       },
@@ -366,7 +374,7 @@ const getWorkspaceUsersHandler: RequestHandler<{ id: string }> = async (req: Aut
       return;
     }
 
-    const users = await getWorkspaceUsers(req.params.id);
+    const users = await getWorkspaceUsers(req.params.id, req.query.search as string | undefined);
     res.json(users);
   } catch (error) {
     console.error('Get workspace users error:', error);
@@ -388,6 +396,13 @@ registry.registerPath({
       required: true,
       schema: { type: 'string' },
       description: 'Channel ID',
+    },
+    {
+      name: 'search',
+      in: 'query',
+      required: false,
+      schema: { type: 'string' },
+      description: 'Search term to filter users by username or email',
     },
   ],
   responses: {
@@ -458,7 +473,7 @@ const getChannelUsersHandler: RequestHandler<{ id: string }> = async (req: AuthR
       return;
     }
 
-    const users = await getChannelUsers(req.params.id);
+    const users = await getChannelUsers(req.params.id, req.query.search as string | undefined);
     res.json(users);
   } catch (error) {
     console.error('Get channel users error:', error);
