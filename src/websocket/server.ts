@@ -1,6 +1,7 @@
 import { WebSocket, WebSocketServer } from 'ws';
 import { Server } from 'http';
 import { verifyToken } from '../utils/jwt';
+import { listUserChannels } from '../db/channels';
 import {
   ClientMessage,
   ServerMessage,
@@ -90,42 +91,75 @@ export class WebSocketHandler {
   private handleMessage(ws: WebSocketWithUser, message: ClientMessage) {
     switch (message.type) {
       case 'subscribe':
-        this.handleSubscribe(ws, message.channelId);
+        this.handleSubscribe(ws, message.workspaceId);
         break;
       case 'unsubscribe':
-        this.handleUnsubscribe(ws, message.channelId);
+        this.handleUnsubscribe(ws, message.workspaceId);
         break;
     }
   }
 
-  private handleSubscribe(ws: WebSocketWithUser, channelId: string) {
-    if (!ws.channelSubscriptions) {
-      ws.channelSubscriptions = new Set();
+  private async handleSubscribe(ws: WebSocketWithUser, workspaceId: string) {
+    if (!ws.userId) {
+      this.sendError(ws, 'Not authenticated');
+      return;
     }
 
-    // Add channel to client's subscriptions
-    ws.channelSubscriptions.add(channelId);
+    try {
+      // Get all channels the user has access to in the workspace
+      const channels = await listUserChannels(ws.userId, workspaceId);
 
-    // Add client to channel's subscribers
-    let subscribers = this.channelSubscriptions.get(channelId);
-    if (!subscribers) {
-      subscribers = new Set();
-      this.channelSubscriptions.set(channelId, subscribers);
+      // Subscribe to each channel
+      for (const channel of channels) {
+        if (!ws.channelSubscriptions) {
+          ws.channelSubscriptions = new Set();
+        }
+
+        // Add channel to client's subscriptions
+        ws.channelSubscriptions.add(channel.id);
+
+        // Add client to channel's subscribers
+        let subscribers = this.channelSubscriptions.get(channel.id);
+        if (!subscribers) {
+          subscribers = new Set();
+          this.channelSubscriptions.set(channel.id, subscribers);
+        }
+        subscribers.add(ws);
+      }
+
+      // Send success message
+      this.sendMessage(ws, {
+        type: 'subscribed',
+        workspaceId,
+      });
+    } catch (error) {
+      this.sendError(ws, 'Failed to subscribe to workspace');
     }
-    subscribers.add(ws);
-
-    this.sendMessage(ws, {
-      type: 'subscribed',
-      channelId,
-    });
   }
 
-  private handleUnsubscribe(ws: WebSocketWithUser, channelId: string) {
-    this.unsubscribeFromChannel(ws, channelId);
-    this.sendMessage(ws, {
-      type: 'unsubscribed',
-      channelId,
-    });
+  private async handleUnsubscribe(ws: WebSocketWithUser, workspaceId: string) {
+    if (!ws.userId) {
+      this.sendError(ws, 'Not authenticated');
+      return;
+    }
+
+    try {
+      // Get all channels the user has access to in the workspace
+      const channels = await listUserChannels(ws.userId, workspaceId);
+
+      // Unsubscribe from each channel
+      for (const channel of channels) {
+        this.unsubscribeFromChannel(ws, channel.id);
+      }
+
+      // Send success message
+      this.sendMessage(ws, {
+        type: 'unsubscribed',
+        workspaceId,
+      });
+    } catch (error) {
+      this.sendError(ws, 'Failed to unsubscribe from workspace');
+    }
   }
 
   private unsubscribeFromChannel(ws: WebSocketWithUser, channelId: string) {
@@ -159,17 +193,13 @@ export class WebSocketHandler {
   }
 
   public broadcastToChannel(channelId: string, message: ServerMessage) {
-    console.log("broadcasting to channel", channelId);
     const subscribers = this.channelSubscriptions.get(channelId);
     if (subscribers) {
-      console.log("subscribers", subscribers);
       const validatedMessage = serverMessageSchema.safeParse(message);
       if (validatedMessage.success) {
-        console.log("validatedMessage", validatedMessage.data);
         const messageStr = JSON.stringify(validatedMessage.data);
-        subscribers.forEach((client) => {
+        subscribers.forEach((client: WebSocketWithUser) => {
           if (client.readyState === WebSocket.OPEN) {
-            console.log("messageStr", messageStr);
             client.send(messageStr);
           }
         });

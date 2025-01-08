@@ -7,16 +7,16 @@ extendZodWithOpenApi(z);
 // Client -> Server messages
 export const subscribeMessageSchema = z.object({
   type: z.literal('subscribe'),
-  channelId: z.string().uuid(),
+  workspaceId: z.string().uuid(),
 }).openapi({
-  description: 'Subscribe to a channel',
+  description: 'Subscribe to a workspace',
 });
 
 export const unsubscribeMessageSchema = z.object({
   type: z.literal('unsubscribe'),
-  channelId: z.string().uuid(),
+  workspaceId: z.string().uuid(),
 }).openapi({
-  description: 'Unsubscribe from a channel',
+  description: 'Unsubscribe from a workspace',
 });
 
 export const clientMessageSchema = z.discriminatedUnion('type', [
@@ -50,16 +50,16 @@ export const connectedMessageSchema = z.object({
 
 export const subscribedMessageSchema = z.object({
   type: z.literal('subscribed'),
-  channelId: z.string().uuid(),
+  workspaceId: z.string().uuid(),
 }).openapi({
-  description: 'Channel subscription successful event',
+  description: 'Workspace subscription successful event',
 });
 
 export const unsubscribedMessageSchema = z.object({
   type: z.literal('unsubscribed'),
-  channelId: z.string().uuid(),
+  workspaceId: z.string().uuid(),
 }).openapi({
-  description: 'Channel unsubscription successful event',
+  description: 'Workspace unsubscription successful event',
 });
 
 export const errorMessageSchema = z.object({
