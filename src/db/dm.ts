@@ -4,6 +4,7 @@ import { publishNewMessage } from '../services/redis';
 import { checkUsersShareWorkspace } from './users';
 import { sql } from 'kysely';
 import { jsonArrayFrom } from "kysely/helpers/postgres";
+import { isWorkspaceMember } from './workspaces';
 
 // Schema for creating a DM channel
 export const createDMChannelSchema = z.object({
@@ -39,26 +40,29 @@ export async function isDMChannelParticipant(channelId: string, userId: string) 
 }
 
 // Create or get existing DM channel
-export async function createDMChannel(userId: string, otherUserIds: string[]) {
-    // Check if all users share a workspace
-    const userIds = [userId, ...otherUserIds];
+export async function createDMChannel(workspaceId: string, userId: string, otherUserIds: string[]) {
+    // First verify the creator is a member of the workspace
+    const isCreatorMember = await isWorkspaceMember(workspaceId, userId);
+    if (!isCreatorMember) {
+        throw new Error('Not a member of this workspace');
+    }
 
-    // Check each pair of users to ensure they share a workspace
-    for (let i = 0; i < userIds.length; i++) {
-        for (let j = i + 1; j < userIds.length; j++) {
-            const canDM = await checkUsersShareWorkspace(userIds[i], userIds[j]);
-            if (!canDM) {
-                throw new Error('Cannot create DM channel with users from different workspaces');
-            }
+    // Verify all users are members of the workspace
+    const userIds = [userId, ...otherUserIds];
+    for (const uid of userIds) {
+        const isMember = await isWorkspaceMember(workspaceId, uid);
+        if (!isMember) {
+            throw new Error(`User ${uid} is not a member of this workspace`);
         }
     }
 
-    // Find existing DM channel with exactly these members
+    // Find existing DM channel with exactly these members in this workspace
     const existingChannel = await db
         .selectFrom('direct_message_channels as dmc')
         .innerJoin('direct_message_members as dmm', 'dmc.id', 'dmm.channel_id')
         .where('dmm.deleted_at', 'is', null)
         .where('dmc.deleted_at', 'is', null)
+        .where('dmc.workspace_id', '=', workspaceId)
         .where(eb =>
             eb.exists(
                 eb.selectFrom('direct_message_members as check_members')
@@ -69,9 +73,30 @@ export async function createDMChannel(userId: string, otherUserIds: string[]) {
                     .groupBy('check_members.channel_id')
             )
         )
-        .groupBy('dmc.id')
-        .having(eb => eb.fn.count('dmm.user_id'), '=', userIds.length)
-        .selectAll('dmc')
+        .leftJoin(
+            db
+                .selectFrom('direct_messages as dm')
+                .select(['dm.channel_id', 'dm.created_at as last_message_at'])
+                .where('dm.deleted_at', 'is', null)
+                .groupBy(['dm.channel_id', 'dm.created_at'])
+                .select(eb => eb.fn.max('dm.id').as('last_message_id'))
+                .as('last_messages'),
+            join => join.onRef('last_messages.channel_id', '=', 'dmc.id')
+        )
+        .groupBy(['dmc.id', 'last_messages.last_message_at'])
+        .select((eb) => [
+            jsonArrayFrom(eb
+                .selectFrom('users')
+                .select('username')
+                .innerJoin('direct_message_members', 'users.id', 'direct_message_members.user_id')
+                .whereRef('direct_message_members.channel_id', '=', 'dmc.id'))
+                .as('usernames'),
+            'dmc.id',
+            'dmc.workspace_id',
+            'dmc.created_at',
+            'dmc.updated_at',
+            'last_messages.last_message_at' as 'last_message_at',
+        ])
         .executeTakeFirst();
 
     if (existingChannel) {
@@ -85,6 +110,7 @@ export async function createDMChannel(userId: string, otherUserIds: string[]) {
         const channel = await trx
             .insertInto('direct_message_channels')
             .values({
+                workspace_id: workspaceId,
                 created_at: now,
                 updated_at: now,
             })
@@ -104,7 +130,21 @@ export async function createDMChannel(userId: string, otherUserIds: string[]) {
             )
             .execute();
 
-        return channel;
+        // Get usernames for the channel members
+        const usernames = await trx
+            .selectFrom('users')
+            .select('username')
+            .where('id', 'in', userIds)
+            .execute();
+
+        return {
+            id: channel.id,
+            workspace_id: channel.workspace_id,
+            created_at: channel.created_at,
+            updated_at: channel.updated_at,
+            usernames: usernames,
+            last_message_at: null,
+        };
     });
 }
 
@@ -257,55 +297,74 @@ export async function deleteDMMessage(messageId: string, userId: string) {
         .executeTakeFirst();
 }
 
-// List DM channels for a user
-export async function listDMChannels(userId: string, search?: string) {
+// List DM channels for a user in a workspace
+export async function listDMChannels(workspaceId: string, userId: string, search?: string) {
+    // Verify user is a member of the workspace
+    const isMember = await isWorkspaceMember(workspaceId, userId);
+    if (!isMember) {
+        throw new Error('Not a member of this workspace');
+    }
+
     let query = db
         .selectFrom('direct_message_channels as dmc')
         .innerJoin('direct_message_members as dmm', 'dmc.id', 'dmm.channel_id')
         .where('dmm.user_id', '=', userId)
         .where('dmm.deleted_at', 'is', null)
         .where('dmc.deleted_at', 'is', null)
+        .where('dmc.workspace_id', '=', workspaceId)
         .leftJoin(
             db
                 .selectFrom('direct_messages as dm')
-                .select(['dm.channel_id', 'dm.created_at as last_message_at'])
+                .select('dm.channel_id')
+                .select(eb => eb.fn.max('dm.created_at').as('last_message_at'))
                 .where('dm.deleted_at', 'is', null)
-                .groupBy(['dm.channel_id', 'dm.created_at'])
-                .select(eb => eb.fn.max('dm.id').as('last_message_id'))
+                .groupBy('dm.channel_id')
                 .as('last_messages'),
             join => join.onRef('last_messages.channel_id', '=', 'dmc.id')
-        )
-        .leftJoin('direct_message_members as other_members', join =>
-            join
-                .onRef('other_members.channel_id', '=', 'dmc.id')
-                .on('other_members.user_id', '!=', userId)
-                .on('other_members.deleted_at', 'is', null)
-        )
-        .leftJoin('users as u', 'u.id', 'other_members.user_id')
-        .select((eb) => [
-            jsonArrayFrom(eb
-                .selectFrom('users')
-                .select('username')
-                .innerJoin('direct_message_members', 'users.id', 'direct_message_members.user_id')
-                .whereRef('direct_message_members.channel_id', '=', 'dmc.id')
-                .whereRef('direct_message_members.channel_id', '=', 'dmc.id'))
-                .as('usernames'),
-            'dmc.id',
-            'dmc.created_at',
-            'dmc.updated_at',
-            'last_messages.last_message_at',
-        ]);
+        );
 
     if (search) {
-        query = query.where(eb =>
-            eb.or([
-                eb('u.username', 'ilike', `%${search}%`),
-                eb('u.email', 'ilike', `%${search}%`)
-            ])
-        );
+        query = query
+            .innerJoin('direct_message_members as search_members', join =>
+                join
+                    .onRef('search_members.channel_id', '=', 'dmc.id')
+                    .on('search_members.deleted_at', 'is', null)
+            )
+            .innerJoin('users as search_users', 'search_users.id', 'search_members.user_id')
+            .where(eb =>
+                eb.or([
+                    eb('search_users.username', 'ilike', `%${search}%`),
+                    eb('search_users.email', 'ilike', `%${search}%`)
+                ])
+            );
     }
 
     return await query
+        .groupBy([
+            'dmc.id',
+            'dmc.workspace_id',
+            'dmc.created_at',
+            'dmc.updated_at',
+            'last_messages.last_message_at'
+        ])
+        .select(eb => [
+            'dmc.id',
+            'dmc.workspace_id',
+            'dmc.created_at',
+            'dmc.updated_at',
+            'last_messages.last_message_at',
+            jsonArrayFrom(
+                eb.selectFrom('users')
+                    .innerJoin(
+                        'direct_message_members',
+                        join => join
+                            .onRef('direct_message_members.user_id', '=', 'users.id')
+                            .onRef('direct_message_members.channel_id', '=', 'dmc.id')
+                    )
+                    .where('direct_message_members.deleted_at', 'is', null)
+                    .select('username')
+            ).as('usernames')
+        ])
         .orderBy([
             sql`last_messages.last_message_at DESC NULLS LAST`,
             sql`dmc.created_at DESC`

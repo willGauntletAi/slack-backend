@@ -36,6 +36,7 @@ export interface DirectMessageChannels {
   deleted_at: Timestamp | null;
   id: Generated<string>;
   updated_at: Generated<Timestamp>;
+  workspace_id: string;
 }
 
 export interface DirectMessageMembers {

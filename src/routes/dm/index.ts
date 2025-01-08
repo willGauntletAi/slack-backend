@@ -28,13 +28,22 @@ const updateDMSchema = z.object({
 
 type UpdateDMBody = z.infer<typeof updateDMSchema>;
 
-// POST /dm - Create a direct message channel
+// POST /dm/workspace/:workspaceId - Create a direct message channel
 registry.registerPath({
   method: 'post',
-  path: '/dm',
+  path: '/dm/workspace/{workspaceId}',
   tags: ['direct-messages'],
-  summary: 'Create a direct message channel',
+  summary: 'Create a direct message channel in a workspace',
   security: [{ bearerAuth: [] }],
+  parameters: [
+    {
+      name: 'workspaceId',
+      in: 'path',
+      required: true,
+      schema: { type: 'string' },
+      description: 'Workspace ID',
+    },
+  ],
   request: {
     body: {
       content: {
@@ -51,6 +60,7 @@ registry.registerPath({
         'application/json': {
           schema: z.object({
             id: z.string(),
+            workspace_id: z.string(),
             created_at: z.string(),
             updated_at: z.string(),
           }).openapi('CreateDMChannelResponse'),
@@ -58,7 +68,7 @@ registry.registerPath({
       },
     },
     '400': {
-      description: 'Invalid request body or users from different workspaces',
+      description: 'Invalid request body',
       content: {
         'application/json': {
           schema: z.object({
@@ -77,8 +87,18 @@ registry.registerPath({
         },
       },
     },
+    '403': {
+      description: 'Not a member of the workspace',
+      content: {
+        'application/json': {
+          schema: z.object({
+            error: z.string(),
+          }),
+        },
+      },
+    },
     '404': {
-      description: 'One or more users not found',
+      description: 'Workspace not found or one or more users not found',
       content: {
         'application/json': {
           schema: z.object({
@@ -90,19 +110,108 @@ registry.registerPath({
   },
 });
 
-const createDMChannelHandler: RequestHandler<{}, {}, CreateDMChannelBody> = async (req: AuthRequest, res) => {
+const createDMChannelHandler: RequestHandler<{ workspaceId: string }, {}, CreateDMChannelBody> = async (req: AuthRequest, res) => {
   try {
     if (!req.user) {
       res.status(401).json({ error: 'Not authenticated' });
       return;
     }
-    const channel = await createDMChannel(req.user.id, req.body.user_ids);
+
+    const channel = await createDMChannel(req.params.workspaceId, req.user.id, req.body.user_ids);
     res.status(201).json(channel);
   } catch (error) {
     console.error('Create DM channel error:', error);
     if (error instanceof Error) {
-      if (error.message === 'Cannot create DM channel with users from different workspaces') {
+      if (error.message.includes('Not a member of this workspace')) {
+        res.status(403).json({ error: error.message });
+      } else if (error.message.includes('not found')) {
+        res.status(404).json({ error: error.message });
+      } else {
         res.status(400).json({ error: error.message });
+      }
+    } else {
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+};
+
+// GET /dm/workspace/:workspaceId - List DM channels in a workspace
+registry.registerPath({
+  method: 'get',
+  path: '/dm/workspace/{workspaceId}',
+  tags: ['direct-messages'],
+  summary: 'List DM channels in a workspace',
+  security: [{ bearerAuth: [] }],
+  parameters: [
+    {
+      name: 'workspaceId',
+      in: 'path',
+      required: true,
+      schema: { type: 'string' },
+      description: 'Workspace ID',
+    },
+    {
+      name: 'search',
+      in: 'query',
+      required: false,
+      schema: { type: 'string' },
+      description: 'Search term to filter DM channels',
+    },
+  ],
+  responses: {
+    '200': {
+      description: 'List of DM channels retrieved successfully',
+      content: {
+        'application/json': {
+          schema: z.array(z.object({
+            id: z.string(),
+            workspace_id: z.string(),
+            created_at: z.string(),
+            updated_at: z.string(),
+            usernames: z.array(z.string()),
+            last_message_at: z.string().nullable(),
+          })).openapi('ListDMChannelsResponse'),
+        },
+      },
+    },
+    '401': {
+      description: 'Not authenticated',
+      content: {
+        'application/json': {
+          schema: z.object({
+            error: z.string(),
+          }),
+        },
+      },
+    },
+    '403': {
+      description: 'Not a member of the workspace',
+      content: {
+        'application/json': {
+          schema: z.object({
+            error: z.string(),
+          }),
+        },
+      },
+    },
+  },
+});
+
+const listDMChannelsHandler: RequestHandler<{ workspaceId: string }, {}, {}, { search?: string }> = async (req: AuthRequest, res) => {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: 'Not authenticated' });
+      return;
+    }
+
+    const search = typeof req.query.search === 'string' ? req.query.search : undefined;
+    const channels = await listDMChannels(req.params.workspaceId, req.user.id, search);
+    res.json(channels.map(c => ({ ...c, usernames: c.usernames.map(u => u.username) })));
+  } catch (error) {
+    console.error('List DM channels error:', error);
+    if (error instanceof Error) {
+      if (error.message === 'Not a member of this workspace') {
+        res.status(403).json({ error: error.message });
       } else {
         res.status(400).json({ error: error.message });
       }
@@ -515,71 +624,13 @@ const deleteDMHandler: RequestHandler<{ messageId: string }> = async (req: AuthR
   }
 };
 
-// GET /dm - List DM channels
-registry.registerPath({
-  method: 'get',
-  path: '/dm',
-  tags: ['direct-messages'],
-  summary: 'List DM channels',
-  security: [{ bearerAuth: [] }],
-  parameters: [
-    {
-      name: 'search',
-      in: 'query',
-      required: false,
-      schema: { type: 'string' },
-      description: 'Search for users by username or email',
-    },
-  ],
-  responses: {
-    '200': {
-      description: 'DM channels retrieved successfully',
-      content: {
-        'application/json': {
-          schema: z.array(z.object({
-            id: z.string(),
-            created_at: z.string(),
-            updated_at: z.string(),
-            last_message_at: z.string().nullable(),
-            usernames: z.array(z.string()),
-          })).openapi('ListDMChannelsResponse'),
-        },
-      },
-    },
-    '401': {
-      description: 'Not authenticated',
-      content: {
-        'application/json': {
-          schema: z.object({
-            error: z.string(),
-          }),
-        },
-      },
-    },
-  },
-});
-
-const listDMChannelsHandler: RequestHandler<{}, {}, {}, { search?: string }> = async (req: AuthRequest, res) => {
-  try {
-    if (!req.user) {
-      res.status(401).json({ error: 'Not authenticated' });
-      return;
-    }
-
-    const search = typeof req.query.search === 'string' ? req.query.search : undefined;
-    const channels = await listDMChannels(req.user.id, search);
-    res.json(channels.map(c => ({ ...channels, usernames: c.usernames.map(u => u.username) })));
-  } catch (error) {
-    console.error('List DM channels error:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-};
-
-router.post('/', authenticate, createDMChannelHandler);
-router.post('/:channelId/messages', authenticate, sendDMHandler);
-router.get('/:channelId/messages', authenticate, getDMMessagesHandler);
-router.put('/:messageId', authenticate, updateDMHandler);
-router.delete('/:messageId', authenticate, deleteDMHandler);
-router.get('/', authenticate, listDMChannelsHandler);
+// Register routes
+router.use(authenticate);
+router.post('/workspace/:workspaceId', createDMChannelHandler);
+router.get('/workspace/:workspaceId', listDMChannelsHandler);
+router.post('/:channelId/messages', sendDMHandler);
+router.get('/:channelId/messages', getDMMessagesHandler);
+router.put('/messages/:messageId', updateDMHandler);
+router.delete('/messages/:messageId', deleteDMHandler);
 
 export default router; 
