@@ -2,6 +2,8 @@ import { db } from './index';
 import { z } from 'zod';
 import { publishNewMessage } from '../services/redis';
 import { checkUsersShareWorkspace } from './users';
+import { sql } from 'kysely';
+import { jsonArrayFrom } from "kysely/helpers/postgres";
 
 // Schema for creating a DM channel
 export const createDMChannelSchema = z.object({
@@ -253,4 +255,60 @@ export async function deleteDMMessage(messageId: string, userId: string) {
         .where('id', '=', messageId)
         .returningAll()
         .executeTakeFirst();
+}
+
+// List DM channels for a user
+export async function listDMChannels(userId: string, search?: string) {
+    let query = db
+        .selectFrom('direct_message_channels as dmc')
+        .innerJoin('direct_message_members as dmm', 'dmc.id', 'dmm.channel_id')
+        .where('dmm.user_id', '=', userId)
+        .where('dmm.deleted_at', 'is', null)
+        .where('dmc.deleted_at', 'is', null)
+        .leftJoin(
+            db
+                .selectFrom('direct_messages as dm')
+                .select(['dm.channel_id', 'dm.created_at as last_message_at'])
+                .where('dm.deleted_at', 'is', null)
+                .groupBy(['dm.channel_id', 'dm.created_at'])
+                .select(eb => eb.fn.max('dm.id').as('last_message_id'))
+                .as('last_messages'),
+            join => join.onRef('last_messages.channel_id', '=', 'dmc.id')
+        )
+        .leftJoin('direct_message_members as other_members', join =>
+            join
+                .onRef('other_members.channel_id', '=', 'dmc.id')
+                .on('other_members.user_id', '!=', userId)
+                .on('other_members.deleted_at', 'is', null)
+        )
+        .leftJoin('users as u', 'u.id', 'other_members.user_id')
+        .select((eb) => [
+            jsonArrayFrom(eb
+                .selectFrom('users')
+                .select('username')
+                .innerJoin('direct_message_members', 'users.id', 'direct_message_members.user_id')
+                .whereRef('direct_message_members.channel_id', '=', 'dmc.id')
+                .whereRef('direct_message_members.channel_id', '=', 'dmc.id'))
+                .as('usernames'),
+            'dmc.id',
+            'dmc.created_at',
+            'dmc.updated_at',
+            'last_messages.last_message_at',
+        ]);
+
+    if (search) {
+        query = query.where(eb =>
+            eb.or([
+                eb('u.username', 'ilike', `%${search}%`),
+                eb('u.email', 'ilike', `%${search}%`)
+            ])
+        );
+    }
+
+    return await query
+        .orderBy([
+            sql`last_messages.last_message_at DESC NULLS LAST`,
+            sql`dmc.created_at DESC`
+        ])
+        .execute();
 } 

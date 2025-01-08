@@ -3,7 +3,7 @@ import { z } from 'zod';
 import type { RequestHandler } from 'express';
 import { authenticate, AuthRequest } from '../../middleware/auth';
 import { registry } from '../../utils/openapi';
-import { createDMChannel, createDMMessage, listDMMessages, updateDMMessage, deleteDMMessage } from '../../db/dm';
+import { createDMChannel, createDMMessage, listDMMessages, updateDMMessage, deleteDMMessage, listDMChannels } from '../../db/dm';
 
 const router = Router();
 
@@ -515,10 +515,71 @@ const deleteDMHandler: RequestHandler<{ messageId: string }> = async (req: AuthR
   }
 };
 
+// GET /dm - List DM channels
+registry.registerPath({
+  method: 'get',
+  path: '/dm',
+  tags: ['direct-messages'],
+  summary: 'List DM channels',
+  security: [{ bearerAuth: [] }],
+  parameters: [
+    {
+      name: 'search',
+      in: 'query',
+      required: false,
+      schema: { type: 'string' },
+      description: 'Search for users by username or email',
+    },
+  ],
+  responses: {
+    '200': {
+      description: 'DM channels retrieved successfully',
+      content: {
+        'application/json': {
+          schema: z.array(z.object({
+            id: z.string(),
+            created_at: z.string(),
+            updated_at: z.string(),
+            last_message_at: z.string().nullable(),
+            usernames: z.array(z.string()),
+          })).openapi('ListDMChannelsResponse'),
+        },
+      },
+    },
+    '401': {
+      description: 'Not authenticated',
+      content: {
+        'application/json': {
+          schema: z.object({
+            error: z.string(),
+          }),
+        },
+      },
+    },
+  },
+});
+
+const listDMChannelsHandler: RequestHandler<{}, {}, {}, { search?: string }> = async (req: AuthRequest, res) => {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: 'Not authenticated' });
+      return;
+    }
+
+    const search = typeof req.query.search === 'string' ? req.query.search : undefined;
+    const channels = await listDMChannels(req.user.id, search);
+    res.json(channels.map(c => ({ ...channels, usernames: c.usernames.map(u => u.username) })));
+  } catch (error) {
+    console.error('List DM channels error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
 router.post('/', authenticate, createDMChannelHandler);
 router.post('/:channelId/messages', authenticate, sendDMHandler);
 router.get('/:channelId/messages', authenticate, getDMMessagesHandler);
 router.put('/:messageId', authenticate, updateDMHandler);
 router.delete('/:messageId', authenticate, deleteDMHandler);
+router.get('/', authenticate, listDMChannelsHandler);
 
 export default router; 

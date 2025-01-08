@@ -12,6 +12,9 @@ import messagesRouter from "./routes/messages";
 import dmRouter from "./routes/dm";
 import { extendZodWithOpenApi } from '@asteasolutions/zod-to-openapi';
 import { z } from 'zod';
+import swaggerUi from 'swagger-ui-express';
+import { registry, generateOpenApiDocument } from './utils/openapi';
+
 extendZodWithOpenApi(z);
 const app = express();
 const server = createServer(app);
@@ -26,6 +29,10 @@ initializeRedis(wsHandler);
 app.use(cors());
 app.use(express.json());
 
+// Serve OpenAPI documentation
+const openApiDocument = generateOpenApiDocument();
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(openApiDocument));
+
 // Routes
 app.use('/auth', authRouter);
 app.use('/user', usersRouter);
@@ -37,4 +44,5 @@ app.use('/dm', dmRouter);
 const port = process.env.PORT || 3000;
 server.listen(port, () => {
   console.log(`Server running on port ${port}`);
+  console.log(`API documentation available at http://localhost:${port}/api-docs`);
 });
