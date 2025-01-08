@@ -3,7 +3,9 @@ import { z } from 'zod';
 import type { RequestHandler } from 'express';
 import { authenticate, AuthRequest } from '../../middleware/auth';
 import { registry } from '../../utils/openapi';
-import { findUserById, updateUser, checkUsersShareWorkspace } from '../../db/users';
+import { findUserById, updateUser, checkUsersShareWorkspace, getWorkspaceUsers, getChannelUsers } from '../../db/users';
+import { isWorkspaceMember, getWorkspaceById } from '../../db/workspaces';
+import { isChannelMember, getChannelById } from '../../db/channels';
 
 const router = Router();
 
@@ -345,8 +347,27 @@ registry.registerPath({
 
 const getWorkspaceUsersHandler: RequestHandler<{ id: string }> = async (req: AuthRequest, res) => {
   try {
-    // TODO: Implement workspace users listing
-    res.status(501).json({ error: 'Not implemented' });
+    if (!req.user?.id) {
+      res.status(401).json({ error: 'Not authenticated' });
+      return;
+    }
+
+    // Check if user is a member of the workspace
+    const isMember = await isWorkspaceMember(req.params.id, req.user.id);
+    if (!isMember) {
+      res.status(403).json({ error: 'Not a member of this workspace' });
+      return;
+    }
+
+    // Get workspace to check if it exists
+    const workspace = await getWorkspaceById(req.params.id);
+    if (!workspace) {
+      res.status(404).json({ error: 'Workspace not found' });
+      return;
+    }
+
+    const users = await getWorkspaceUsers(req.params.id);
+    res.json(users);
   } catch (error) {
     console.error('Get workspace users error:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -418,8 +439,27 @@ registry.registerPath({
 
 const getChannelUsersHandler: RequestHandler<{ id: string }> = async (req: AuthRequest, res) => {
   try {
-    // TODO: Implement channel users listing
-    res.status(501).json({ error: 'Not implemented' });
+    if (!req.user?.id) {
+      res.status(401).json({ error: 'Not authenticated' });
+      return;
+    }
+
+    // Check if user is a member of the channel
+    const isMember = await isChannelMember(req.params.id, req.user.id);
+    if (!isMember) {
+      res.status(403).json({ error: 'Not a member of this channel' });
+      return;
+    }
+
+    // Get channel to check if it exists
+    const channel = await getChannelById(req.params.id);
+    if (!channel) {
+      res.status(404).json({ error: 'Channel not found' });
+      return;
+    }
+
+    const users = await getChannelUsers(req.params.id);
+    res.json(users);
   } catch (error) {
     console.error('Get channel users error:', error);
     res.status(500).json({ error: 'Internal server error' });
