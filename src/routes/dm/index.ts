@@ -3,12 +3,13 @@ import { z } from 'zod';
 import type { RequestHandler } from 'express';
 import { authenticate, AuthRequest } from '../../middleware/auth';
 import { registry } from '../../utils/openapi';
+import { createDMChannel, createDMMessage, listDMMessages, updateDMMessage, deleteDMMessage } from '../../db/dm';
 
 const router = Router();
 
 // Schema for creating a DM channel
 const createDMChannelSchema = z.object({
-  user_id: z.string(),
+  user_ids: z.array(z.string()).min(1),
 });
 
 type CreateDMChannelBody = z.infer<typeof createDMChannelSchema>;
@@ -50,10 +51,105 @@ registry.registerPath({
         'application/json': {
           schema: z.object({
             id: z.string(),
-            user1_id: z.string(),
-            user2_id: z.string(),
             created_at: z.string(),
+            updated_at: z.string(),
           }).openapi('CreateDMChannelResponse'),
+        },
+      },
+    },
+    '400': {
+      description: 'Invalid request body or users from different workspaces',
+      content: {
+        'application/json': {
+          schema: z.object({
+            error: z.string(),
+          }),
+        },
+      },
+    },
+    '401': {
+      description: 'Not authenticated',
+      content: {
+        'application/json': {
+          schema: z.object({
+            error: z.string(),
+          }),
+        },
+      },
+    },
+    '404': {
+      description: 'One or more users not found',
+      content: {
+        'application/json': {
+          schema: z.object({
+            error: z.string(),
+          }),
+        },
+      },
+    },
+  },
+});
+
+const createDMChannelHandler: RequestHandler<{}, {}, CreateDMChannelBody> = async (req: AuthRequest, res) => {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: 'Not authenticated' });
+      return;
+    }
+    const channel = await createDMChannel(req.user.id, req.body.user_ids);
+    res.status(201).json(channel);
+  } catch (error) {
+    console.error('Create DM channel error:', error);
+    if (error instanceof Error) {
+      if (error.message === 'Cannot create DM channel with users from different workspaces') {
+        res.status(400).json({ error: error.message });
+      } else {
+        res.status(400).json({ error: error.message });
+      }
+    } else {
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+};
+
+// POST /dm/:channelId/messages - Send a DM
+registry.registerPath({
+  method: 'post',
+  path: '/dm/{channelId}/messages',
+  tags: ['direct-messages'],
+  summary: 'Send a direct message',
+  security: [{ bearerAuth: [] }],
+  parameters: [
+    {
+      name: 'channelId',
+      in: 'path',
+      required: true,
+      schema: { type: 'string' },
+      description: 'DM Channel ID',
+    },
+  ],
+  request: {
+    body: {
+      content: {
+        'application/json': {
+          schema: sendDMSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    '201': {
+      description: 'Message sent successfully',
+      content: {
+        'application/json': {
+          schema: z.object({
+            id: z.string(),
+            content: z.string(),
+            user_id: z.string(),
+            created_at: z.string(),
+            updated_at: z.string(),
+            username: z.string(),
+          }).openapi('SendDMResponse'),
         },
       },
     },
@@ -77,8 +173,8 @@ registry.registerPath({
         },
       },
     },
-    '404': {
-      description: 'User not found',
+    '403': {
+      description: 'Not a participant in the DM channel',
       content: {
         'application/json': {
           schema: z.object({
@@ -90,13 +186,25 @@ registry.registerPath({
   },
 });
 
-const createDMChannelHandler: RequestHandler<{}, {}, CreateDMChannelBody> = async (req: AuthRequest, res) => {
+const sendDMHandler: RequestHandler<{ channelId: string }, {}, SendDMBody> = async (req: AuthRequest, res) => {
   try {
-    // TODO: Implement DM channel creation
-    res.status(501).json({ error: 'Not implemented' });
+    if (!req.user) {
+      res.status(401).json({ error: 'Not authenticated' });
+      return;
+    }
+    const message = await createDMMessage(req.params.channelId, req.user.id, req.body);
+    res.status(201).json(message);
   } catch (error) {
-    console.error('Create DM channel error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error('Send DM error:', error);
+    if (error instanceof Error) {
+      if (error.message === 'Not a participant in this DM channel') {
+        res.status(403).json({ error: error.message });
+      } else {
+        res.status(400).json({ error: error.message });
+      }
+    } else {
+      res.status(500).json({ error: 'Internal server error' });
+    }
   }
 };
 
@@ -120,7 +228,7 @@ registry.registerPath({
       in: 'query',
       required: false,
       schema: { type: 'string' },
-      description: 'Get messages before this timestamp',
+      description: 'Get messages before this message ID',
     },
     {
       name: 'limit',
@@ -141,6 +249,7 @@ registry.registerPath({
             user_id: z.string(),
             created_at: z.string(),
             updated_at: z.string(),
+            username: z.string(),
           })).openapi('GetDMMessagesResponse'),
         },
       },
@@ -165,26 +274,49 @@ registry.registerPath({
         },
       },
     },
-    '404': {
-      description: 'DM channel not found',
-      content: {
-        'application/json': {
-          schema: z.object({
-            error: z.string(),
-          }),
-        },
-      },
-    },
   },
 });
 
-const getDMMessagesHandler: RequestHandler<{ channelId: string }> = async (req: AuthRequest, res) => {
+const getDMMessagesHandler: RequestHandler<
+  { channelId: string },
+  {},
+  {},
+  { before?: string; limit?: string }
+> = async (req: AuthRequest, res) => {
   try {
-    // TODO: Implement DM message retrieval
-    res.status(501).json({ error: 'Not implemented' });
+    if (!req.user) {
+      res.status(401).json({ error: 'Not authenticated' });
+      return;
+    }
+
+    // Parse and validate limit
+    let limit = 50;
+    if (req.query.limit) {
+      const parsedLimit = parseInt(req.query.limit as string, 10);
+      if (!isNaN(parsedLimit) && parsedLimit > 0 && parsedLimit <= 100) {
+        limit = parsedLimit;
+      }
+    }
+
+    // Parse and validate before
+    let before: string | undefined;
+    if (req.query.before && typeof req.query.before === 'string') {
+      before = req.query.before;
+    }
+
+    const messages = await listDMMessages(req.params.channelId, req.user.id, limit, before);
+    res.json(messages);
   } catch (error) {
     console.error('Get DM messages error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    if (error instanceof Error) {
+      if (error.message === 'Not a participant in this DM channel') {
+        res.status(403).json({ error: error.message });
+      } else {
+        res.status(400).json({ error: error.message });
+      }
+    } else {
+      res.status(500).json({ error: 'Internal server error' });
+    }
   }
 };
 
@@ -273,16 +405,120 @@ registry.registerPath({
 
 const updateDMHandler: RequestHandler<{ messageId: string }, {}, UpdateDMBody> = async (req: AuthRequest, res) => {
   try {
-    // TODO: Implement DM update
-    res.status(501).json({ error: 'Not implemented' });
+    if (!req.user) {
+      res.status(401).json({ error: 'Not authenticated' });
+      return;
+    }
+    const message = await updateDMMessage(req.params.messageId, req.user.id, req.body);
+    res.json(message);
   } catch (error) {
     console.error('Update DM error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    if (error instanceof Error) {
+      if (error.message === 'Not authorized to update this message') {
+        res.status(403).json({ error: error.message });
+      } else if (error.message === 'Message not found') {
+        res.status(404).json({ error: error.message });
+      } else {
+        res.status(400).json({ error: error.message });
+      }
+    } else {
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+};
+
+// DELETE /dm/:messageId - Delete a DM
+registry.registerPath({
+  method: 'delete',
+  path: '/dm/{messageId}',
+  tags: ['direct-messages'],
+  summary: 'Delete a direct message',
+  security: [{ bearerAuth: [] }],
+  parameters: [
+    {
+      name: 'messageId',
+      in: 'path',
+      required: true,
+      schema: { type: 'string' },
+      description: 'Message ID',
+    },
+  ],
+  responses: {
+    '200': {
+      description: 'Message deleted successfully',
+      content: {
+        'application/json': {
+          schema: z.object({
+            id: z.string(),
+            deleted_at: z.string(),
+          }).openapi('DeleteDMResponse'),
+        },
+      },
+    },
+    '401': {
+      description: 'Not authenticated',
+      content: {
+        'application/json': {
+          schema: z.object({
+            error: z.string(),
+          }),
+        },
+      },
+    },
+    '403': {
+      description: 'Not authorized to delete message',
+      content: {
+        'application/json': {
+          schema: z.object({
+            error: z.string(),
+          }),
+        },
+      },
+    },
+    '404': {
+      description: 'Message not found',
+      content: {
+        'application/json': {
+          schema: z.object({
+            error: z.string(),
+          }),
+        },
+      },
+    },
+  },
+});
+
+const deleteDMHandler: RequestHandler<{ messageId: string }> = async (req: AuthRequest, res) => {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: 'Not authenticated' });
+      return;
+    }
+    const message = await deleteDMMessage(req.params.messageId, req.user.id);
+    res.json({
+      id: message?.id,
+      deleted_at: message?.deleted_at,
+    });
+  } catch (error) {
+    console.error('Delete DM error:', error);
+    if (error instanceof Error) {
+      if (error.message === 'Not authorized to delete this message') {
+        res.status(403).json({ error: error.message });
+      } else if (error.message === 'Message not found') {
+        res.status(404).json({ error: error.message });
+      } else {
+        res.status(400).json({ error: error.message });
+      }
+    } else {
+      res.status(500).json({ error: 'Internal server error' });
+    }
   }
 };
 
 router.post('/', authenticate, createDMChannelHandler);
+router.post('/:channelId/messages', authenticate, sendDMHandler);
 router.get('/:channelId/messages', authenticate, getDMMessagesHandler);
 router.put('/:messageId', authenticate, updateDMHandler);
+router.delete('/:messageId', authenticate, deleteDMHandler);
 
 export default router; 
