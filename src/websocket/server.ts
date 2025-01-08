@@ -2,27 +2,33 @@ import { WebSocket, WebSocketServer } from 'ws';
 import { Server } from 'http';
 import { verifyToken } from '../utils/jwt';
 import { listUserChannels } from '../db/channels';
+import { createWebsocketConnection, deleteWebsocketConnection, getConnectionsForChannel, getConnectionsForDM } from '../db/websocket';
+import { publishTyping, publishPresence } from '../services/redis';
+import { v4 as uuidv4 } from 'uuid';
 import {
-  ClientMessage,
   ServerMessage,
-  clientMessageSchema,
   serverMessageSchema,
   ConnectedMessage,
-  SubscribedMessage,
-  UnsubscribedMessage,
   ErrorMessage,
+  clientMessageSchema,
+  ClientMessage,
+  ServerDirectMessage,
 } from './types';
+import { findUserById } from '../db/users';
 
 interface WebSocketWithUser extends WebSocket {
   userId?: string;
-  channelSubscriptions?: Set<string>;
+  username?: string;
+  connectionId?: string;
 }
 
 export class WebSocketHandler {
   private wss: WebSocketServer;
-  private channelSubscriptions: Map<string, Set<WebSocketWithUser>> = new Map();
+  private serverId: string;
+  private connections: Map<string, WebSocketWithUser> = new Map();
 
   constructor(server: Server) {
+    this.serverId = uuidv4();
     this.wss = new WebSocketServer({ server });
     this.setupWebSocketServer();
   }
@@ -33,7 +39,7 @@ export class WebSocketHandler {
         // Extract token from query string
         const url = new URL(request.url || '', 'ws://localhost');
         const token = url.searchParams.get('token');
-        
+
         if (!token) {
           this.sendError(ws, 'Token required');
           ws.close(1008, 'Token required');
@@ -44,7 +50,17 @@ export class WebSocketHandler {
         try {
           const payload = await verifyToken(token);
           ws.userId = payload.userId;
-          ws.channelSubscriptions = new Set();
+          ws.username = (await findUserById(ws.userId))?.username;
+          // Record connection in database and store connection ID
+          ws.connectionId = await createWebsocketConnection(ws.userId, this.serverId);
+          this.connections.set(ws.connectionId, ws);
+
+          // Publish presence event for new connection
+          await publishPresence({
+            userId: ws.userId,
+            username: ws.username!,
+            status: 'online'
+          });
         } catch (error) {
           this.sendError(ws, 'Invalid token');
           ws.close(1008, 'Invalid token');
@@ -56,7 +72,7 @@ export class WebSocketHandler {
           try {
             const message = JSON.parse(data);
             const validatedMessage = clientMessageSchema.safeParse(message);
-            
+
             if (!validatedMessage.success) {
               this.sendError(ws, 'Invalid message format');
               return;
@@ -69,10 +85,20 @@ export class WebSocketHandler {
         });
 
         // Handle client disconnection
-        ws.on('close', () => {
-          if (ws.channelSubscriptions) {
-            for (const channelId of ws.channelSubscriptions) {
-              this.unsubscribeFromChannel(ws, channelId);
+        ws.on('close', async () => {
+          if (ws.connectionId) {
+            // Remove from connections map
+            this.connections.delete(ws.connectionId);
+            // Remove from database using connection ID
+            await deleteWebsocketConnection(ws.connectionId);
+
+            // Publish presence event for disconnection
+            if (ws.userId && ws.username) {
+              await publishPresence({
+                userId: ws.userId,
+                username: ws.username,
+                status: 'offline'
+              });
             }
           }
         });
@@ -88,91 +114,23 @@ export class WebSocketHandler {
     });
   }
 
-  private handleMessage(ws: WebSocketWithUser, message: ClientMessage) {
+  private async handleMessage(ws: WebSocketWithUser, message: ClientMessage) {
+    if (!ws.userId) {
+      this.sendError(ws, 'Not authenticated');
+      return;
+    }
+
     switch (message.type) {
-      case 'subscribe':
-        this.handleSubscribe(ws, message.workspaceId);
+      case 'typing':
+        await publishTyping({
+          channelId: message.channelId,
+          userId: ws.userId,
+          username: ws.username!,
+          isDm: false,
+        });
         break;
-      case 'unsubscribe':
-        this.handleUnsubscribe(ws, message.workspaceId);
-        break;
-    }
-  }
-
-  private async handleSubscribe(ws: WebSocketWithUser, workspaceId: string) {
-    if (!ws.userId) {
-      this.sendError(ws, 'Not authenticated');
-      return;
-    }
-
-    try {
-      // Get all channels the user has access to in the workspace
-      const channels = await listUserChannels(ws.userId, workspaceId);
-
-      // Subscribe to each channel
-      for (const channel of channels) {
-        if (!ws.channelSubscriptions) {
-          ws.channelSubscriptions = new Set();
-        }
-
-        // Add channel to client's subscriptions
-        ws.channelSubscriptions.add(channel.id);
-
-        // Add client to channel's subscribers
-        let subscribers = this.channelSubscriptions.get(channel.id);
-        if (!subscribers) {
-          subscribers = new Set();
-          this.channelSubscriptions.set(channel.id, subscribers);
-        }
-        subscribers.add(ws);
-      }
-
-      // Send success message
-      this.sendMessage(ws, {
-        type: 'subscribed',
-        workspaceId,
-      });
-    } catch (error) {
-      this.sendError(ws, 'Failed to subscribe to workspace');
-    }
-  }
-
-  private async handleUnsubscribe(ws: WebSocketWithUser, workspaceId: string) {
-    if (!ws.userId) {
-      this.sendError(ws, 'Not authenticated');
-      return;
-    }
-
-    try {
-      // Get all channels the user has access to in the workspace
-      const channels = await listUserChannels(ws.userId, workspaceId);
-
-      // Unsubscribe from each channel
-      for (const channel of channels) {
-        this.unsubscribeFromChannel(ws, channel.id);
-      }
-
-      // Send success message
-      this.sendMessage(ws, {
-        type: 'unsubscribed',
-        workspaceId,
-      });
-    } catch (error) {
-      this.sendError(ws, 'Failed to unsubscribe from workspace');
-    }
-  }
-
-  private unsubscribeFromChannel(ws: WebSocketWithUser, channelId: string) {
-    // Remove channel from client's subscriptions
-    ws.channelSubscriptions?.delete(channelId);
-
-    // Remove client from channel's subscribers
-    const subscribers = this.channelSubscriptions.get(channelId);
-    if (subscribers) {
-      subscribers.delete(ws);
-      if (subscribers.size === 0) {
-        this.channelSubscriptions.delete(channelId);
-      }
+      default:
+        console.log('Unhandled message type:', message.type);
     }
   }
 
@@ -192,18 +150,29 @@ export class WebSocketHandler {
     }
   }
 
-  public broadcastToChannel(channelId: string, message: ServerMessage) {
-    const subscribers = this.channelSubscriptions.get(channelId);
-    if (subscribers) {
-      const validatedMessage = serverMessageSchema.safeParse(message);
-      if (validatedMessage.success) {
-        const messageStr = JSON.stringify(validatedMessage.data);
-        subscribers.forEach((client: WebSocketWithUser) => {
-          if (client.readyState === WebSocket.OPEN) {
-            client.send(messageStr);
-          }
-        });
+  public async broadcastToChannel(channelId: string, message: ServerMessage) {
+    const connections = await getConnectionsForChannel(channelId, this.serverId);
+    for (const connection of connections) {
+      const ws = this.connections.get(connection.connection_id);
+      if (ws) {
+        this.sendMessage(ws, message);
       }
+    }
+  }
+
+  public async broadcastToDm(channelId: string, message: ServerMessage) {
+    const connections = await getConnectionsForDM(channelId, this.serverId);
+    for (const connection of connections) {
+      const ws = this.connections.get(connection.connection_id);
+      if (ws) {
+        this.sendMessage(ws, message);
+      }
+    }
+  }
+
+  public broadcastToAll(message: ServerMessage) {
+    for (const ws of this.connections.values()) {
+      this.sendMessage(ws, message);
     }
   }
 } 

@@ -95,6 +95,13 @@ export interface Users {
   username: string;
 }
 
+export interface WebsocketConnections {
+  connection_id: Generated<string>;
+  created_at: Generated<Timestamp>;
+  server_id: string;
+  user_id: string;
+}
+
 export interface WorkspaceMembers {
   deleted_at: Timestamp | null;
   joined_at: Generated<Timestamp>;
@@ -122,6 +129,7 @@ export interface DB {
   messages: Messages;
   refresh_tokens: RefreshTokens;
   users: Users;
+  websocket_connections: WebsocketConnections;
   workspace_members: WorkspaceMembers;
   workspaces: Workspaces;
 }

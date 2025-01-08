@@ -1,0 +1,18 @@
+DONE: clean up messages provider. No need to require loadMessages when switching channels.
+DONE: typing indicators
+dm
+presence indicators
+threads
+read indicators
+emoji reactions
+file uploads
+
+add to channel
+channel admin/remove from channel
+remove other user from workspace
+firebase auth
+search
+make it look pretty?
+
+deploy to aws:
+    rds, managed redis, ecs

@@ -153,14 +153,17 @@ export async function createDMMessage(channelId: string, userId: string, data: C
     });
 
     // Publish the new message event
-    await publishNewMessage(`dm:${channelId}`, {
-        id: result.id.toString(),
-        content: result.content,
-        parent_id: null,
-        created_at: result.created_at.toISOString(),
-        updated_at: result.updated_at.toISOString(),
-        user_id: result.user_id,
-        username: result.username,
+    await publishNewMessage({
+        channelId,
+        message: {
+            id: result.id.toString(),
+            content: result.content,
+            parent_id: null,
+            created_at: result.created_at.toISOString(),
+            updated_at: result.updated_at.toISOString(),
+            user_id: result.user_id,
+            username: result.username,
+        }
     });
 
     return result;

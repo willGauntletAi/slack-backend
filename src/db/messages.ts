@@ -55,11 +55,14 @@ export async function createMessage(channelId: string, userId: string, data: Cre
   });
 
   // Publish the new message event
-  await publishNewMessage(channelId, {
-    ...result,
-    parent_id: result.parent_id?.toString() || null,
-    created_at: result.created_at.toISOString(),
-    updated_at: result.updated_at.toISOString(),
+  await publishNewMessage({
+    channelId,
+    message: {
+      ...result,
+      parent_id: result.parent_id?.toString() || null,
+      created_at: result.created_at.toISOString(),
+      updated_at: result.updated_at.toISOString(),
+    }
   });
 
   return result;
@@ -67,7 +70,7 @@ export async function createMessage(channelId: string, userId: string, data: Cre
 
 // List messages in a channel
 export async function listChannelMessages(
-  channelId: string, 
+  channelId: string,
   userId: string,
   limit: number = 50,
   before?: string // message ID to fetch messages before

@@ -1,27 +1,17 @@
 import { z } from 'zod';
 import { extendZodWithOpenApi } from '@asteasolutions/zod-to-openapi';
 
-// Extend Zod with OpenAPI functionality
 extendZodWithOpenApi(z);
 
 // Client -> Server messages
-export const subscribeMessageSchema = z.object({
-  type: z.literal('subscribe'),
-  workspaceId: z.string().uuid(),
-}).openapi({
-  description: 'Subscribe to a workspace',
-});
-
-export const unsubscribeMessageSchema = z.object({
-  type: z.literal('unsubscribe'),
-  workspaceId: z.string().uuid(),
-}).openapi({
-  description: 'Unsubscribe from a workspace',
+export const clientTypingMessageSchema = z.object({
+  type: z.literal('typing'),
+  channelId: z.string().uuid(),
+  isDM: z.boolean(),
 });
 
 export const clientMessageSchema = z.discriminatedUnion('type', [
-  subscribeMessageSchema,
-  unsubscribeMessageSchema,
+  clientTypingMessageSchema,
 ]);
 
 // Server -> Client messages
@@ -41,25 +31,27 @@ export const newMessageSchema = z.object({
   description: 'New message event',
 });
 
+export const newDirectMessageSchema = z.object({
+  type: z.literal('new_direct_message'),
+  channelId: z.string().uuid(),
+  message: z.object({
+    id: z.string(),
+    content: z.string(),
+    parent_id: z.string().nullable(),
+    created_at: z.string(),
+    updated_at: z.string(),
+    user_id: z.string().uuid(),
+    username: z.string(),
+  }),
+}).openapi({
+  description: 'New direct message event',
+});
+
 export const connectedMessageSchema = z.object({
   type: z.literal('connected'),
   userId: z.string().uuid(),
 }).openapi({
   description: 'Connection successful event',
-});
-
-export const subscribedMessageSchema = z.object({
-  type: z.literal('subscribed'),
-  workspaceId: z.string().uuid(),
-}).openapi({
-  description: 'Workspace subscription successful event',
-});
-
-export const unsubscribedMessageSchema = z.object({
-  type: z.literal('unsubscribed'),
-  workspaceId: z.string().uuid(),
-}).openapi({
-  description: 'Workspace unsubscription successful event',
 });
 
 export const errorMessageSchema = z.object({
@@ -68,18 +60,37 @@ export const errorMessageSchema = z.object({
   description: 'Error event',
 });
 
+export const typingMessageSchema = z.object({
+  type: z.literal('typing'),
+  channelId: z.string().uuid(),
+  userId: z.string().uuid(),
+  username: z.string(),
+}).openapi({
+  description: 'Typing event',
+});
+
+export const presenceMessageSchema = z.object({
+  type: z.literal('presence'),
+  userId: z.string().uuid(),
+  username: z.string(),
+  status: z.enum(['online', 'offline']),
+}).openapi({
+  description: 'User presence event',
+});
+
 export const serverMessageSchema = z.discriminatedUnion('type', [
   newMessageSchema,
+  newDirectMessageSchema,
   connectedMessageSchema,
-  subscribedMessageSchema,
-  unsubscribedMessageSchema,
+  typingMessageSchema,
+  presenceMessageSchema,
 ]).or(errorMessageSchema);
 
 // Type exports
 export type ClientMessage = z.infer<typeof clientMessageSchema>;
 export type ServerMessage = z.infer<typeof serverMessageSchema>;
+export type ServerDirectMessage = z.infer<typeof newDirectMessageSchema>;
 export type NewMessageEvent = z.infer<typeof newMessageSchema>;
 export type ConnectedMessage = z.infer<typeof connectedMessageSchema>;
-export type SubscribedMessage = z.infer<typeof subscribedMessageSchema>;
-export type UnsubscribedMessage = z.infer<typeof unsubscribedMessageSchema>;
-export type ErrorMessage = z.infer<typeof errorMessageSchema>; 
+export type ErrorMessage = z.infer<typeof errorMessageSchema>;
+export type PresenceMessage = z.infer<typeof presenceMessageSchema>; 
