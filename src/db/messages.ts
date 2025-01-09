@@ -2,6 +2,7 @@ import { db } from './index';
 import { z } from 'zod';
 import { isChannelMember } from './channels';
 import { publishNewMessage } from '../services/redis';
+import { jsonArrayFrom } from 'kysely/helpers/postgres';
 
 // Schema for creating a message
 export const createMessageSchema = z.object({
@@ -88,7 +89,7 @@ export async function listChannelMessages(
     .where('m.deleted_at', 'is', null)
     .orderBy('m.id', 'desc')
     .limit(limit)
-    .select([
+    .select(eb => [
       'm.id',
       'm.content',
       'm.parent_id',
@@ -97,6 +98,11 @@ export async function listChannelMessages(
       'm.user_id',
       'm.channel_id',
       'u.username',
+      jsonArrayFrom(
+        eb.selectFrom('message_reactions as mr')
+          .innerJoin('users as ru', 'u.id', 'mr.user_id')
+          .select(['mr.id', 'mr.emoji', 'mr.message_id', 'mr.user_id', 'ru.username'])
+          .whereRef('mr.message_id', '=', 'm.id')).as('reactions')
     ]);
 
   if (before) {

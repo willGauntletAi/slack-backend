@@ -16,9 +16,9 @@ export const CreateMessageResponseSchema = z.object({
 export const MessageReactionSchema = z.object({
     id: z.string(),
     emoji: z.string(),
+    message_id: z.string(),
     user_id: z.string(),
     username: z.string(),
-    created_at: z.string(),
 });
 
 export const ListMessagesResponseSchema = z.array(z.object({
