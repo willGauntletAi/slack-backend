@@ -36,9 +36,6 @@ class RedisService {
 
     this.subscriber.on('connect', () => {
       console.log('Redis subscriber connected');
-      if (!this.isSubscribed) {
-        this.setupSubscriptions();
-      }
     });
   }
 
@@ -83,6 +80,7 @@ class RedisService {
             this.handlePresence(JSON.parse(message));
             break;
           case 'reaction':
+            console.log('Received reaction event on Redis channel:', message);
             this.handleReaction(JSON.parse(message));
             break;
           default:
@@ -157,30 +155,22 @@ class RedisService {
   }
 
   public async publishNewMessage(payload: RedisMessageEvent) {
-    console.log('Publishing new message:', payload);
     const result = await this.publisher.publish('new_message', JSON.stringify(payload));
-    console.log('Publish result:', result);
     return result;
   }
 
   public async publishTyping(payload: RedisTypingEvent) {
-    console.log('Publishing typing event:', payload);
     const result = await this.publisher.publish('typing', JSON.stringify(payload));
-    console.log('Publish result:', result);
     return result;
   }
 
   public async publishPresence(payload: RedisPresenceEvent) {
-    console.log('Publishing presence event:', payload);
     const result = await this.publisher.publish('presence', JSON.stringify(payload));
-    console.log('Publish result:', result);
     return result;
   }
 
   public async publishReaction(payload: RedisReactionEvent) {
-    console.log('Publishing reaction event:', payload);
     const result = await this.publisher.publish('reaction', JSON.stringify(payload));
-    console.log('Publish result:', result);
     return result;
   }
 }
