@@ -3,8 +3,18 @@ import { z } from 'zod';
 import type { RequestHandler } from 'express';
 import { authenticate, AuthRequest } from '../../middleware/auth';
 import { registry } from '../../utils/openapi';
-import { createMessage, listChannelMessages, updateMessage, deleteMessage, createMessageSchema, updateMessageSchema } from '../../db/messages';
-import { addMessageReaction, createMessageReactionSchema } from '../../db/message-reactions';
+import { createMessage, listChannelMessages, updateMessage, deleteMessage } from '../../db/messages';
+import { addMessageReaction } from '../../db/message-reactions';
+import {
+  createMessageSchema,
+  updateMessageSchema,
+  createMessageReactionSchema,
+  CreateMessageResponseSchema,
+  ListMessagesResponseSchema,
+  UpdateMessageResponseSchema,
+  CreateMessageReactionResponseSchema,
+  ErrorResponseSchema,
+} from './types';
 
 const router = Router();
 
@@ -38,15 +48,7 @@ registry.registerPath({
       description: 'Message created successfully',
       content: {
         'application/json': {
-          schema: z.object({
-            id: z.string(),
-            content: z.string(),
-            parent_id: z.string().nullable(),
-            created_at: z.string(),
-            updated_at: z.string(),
-            user_id: z.string(),
-            channel_id: z.string(),
-          }).openapi('CreateMessageResponse'),
+          schema: CreateMessageResponseSchema.openapi('CreateMessageResponse'),
         },
       },
     },
@@ -54,9 +56,7 @@ registry.registerPath({
       description: 'Invalid request body',
       content: {
         'application/json': {
-          schema: z.object({
-            error: z.string(),
-          }),
+          schema: ErrorResponseSchema,
         },
       },
     },
@@ -64,9 +64,7 @@ registry.registerPath({
       description: 'Not authenticated',
       content: {
         'application/json': {
-          schema: z.object({
-            error: z.string(),
-          }),
+          schema: ErrorResponseSchema,
         },
       },
     },
@@ -74,9 +72,7 @@ registry.registerPath({
       description: 'Not a member of the channel',
       content: {
         'application/json': {
-          schema: z.object({
-            error: z.string(),
-          }),
+          schema: ErrorResponseSchema,
         },
       },
     },
@@ -142,16 +138,7 @@ registry.registerPath({
       description: 'List of messages retrieved successfully',
       content: {
         'application/json': {
-          schema: z.array(z.object({
-            id: z.string(),
-            content: z.string(),
-            parent_id: z.string().nullable(),
-            created_at: z.string(),
-            updated_at: z.string(),
-            user_id: z.string(),
-            username: z.string(),
-            channel_id: z.string(),
-          })).openapi('ListMessagesResponse'),
+          schema: ListMessagesResponseSchema.openapi('ListMessagesResponse'),
         },
       },
     },
@@ -159,9 +146,7 @@ registry.registerPath({
       description: 'Not authenticated',
       content: {
         'application/json': {
-          schema: z.object({
-            error: z.string(),
-          }),
+          schema: ErrorResponseSchema,
         },
       },
     },
@@ -169,9 +154,7 @@ registry.registerPath({
       description: 'Not a member of the channel',
       content: {
         'application/json': {
-          schema: z.object({
-            error: z.string(),
-          }),
+          schema: ErrorResponseSchema,
         },
       },
     },
@@ -230,15 +213,7 @@ registry.registerPath({
       description: 'Message updated successfully',
       content: {
         'application/json': {
-          schema: z.object({
-            id: z.string(),
-            content: z.string(),
-            parent_id: z.string().nullable(),
-            created_at: z.string(),
-            updated_at: z.string(),
-            user_id: z.string(),
-            channel_id: z.string(),
-          }).openapi('UpdateMessageResponse'),
+          schema: UpdateMessageResponseSchema.openapi('UpdateMessageResponse'),
         },
       },
     },
@@ -246,9 +221,7 @@ registry.registerPath({
       description: 'Invalid request body',
       content: {
         'application/json': {
-          schema: z.object({
-            error: z.string(),
-          }),
+          schema: ErrorResponseSchema,
         },
       },
     },
@@ -256,9 +229,7 @@ registry.registerPath({
       description: 'Not authenticated',
       content: {
         'application/json': {
-          schema: z.object({
-            error: z.string(),
-          }),
+          schema: ErrorResponseSchema,
         },
       },
     },
@@ -266,9 +237,7 @@ registry.registerPath({
       description: 'Not authorized to update this message',
       content: {
         'application/json': {
-          schema: z.object({
-            error: z.string(),
-          }),
+          schema: ErrorResponseSchema,
         },
       },
     },
@@ -276,9 +245,7 @@ registry.registerPath({
       description: 'Message not found',
       content: {
         'application/json': {
-          schema: z.object({
-            error: z.string(),
-          }),
+          schema: ErrorResponseSchema,
         },
       },
     },
@@ -350,9 +317,7 @@ registry.registerPath({
       description: 'Not authenticated',
       content: {
         'application/json': {
-          schema: z.object({
-            error: z.string(),
-          }),
+          schema: ErrorResponseSchema,
         },
       },
     },
@@ -360,9 +325,7 @@ registry.registerPath({
       description: 'Not authorized to delete this message',
       content: {
         'application/json': {
-          schema: z.object({
-            error: z.string(),
-          }),
+          schema: ErrorResponseSchema,
         },
       },
     },
@@ -370,9 +333,7 @@ registry.registerPath({
       description: 'Message not found',
       content: {
         'application/json': {
-          schema: z.object({
-            error: z.string(),
-          }),
+          schema: ErrorResponseSchema,
         },
       },
     },
@@ -434,13 +395,7 @@ registry.registerPath({
       description: 'Reaction added successfully',
       content: {
         'application/json': {
-          schema: z.object({
-            id: z.string(),
-            emoji: z.string(),
-            message_id: z.string(),
-            user_id: z.string(),
-            created_at: z.string(),
-          }).openapi('CreateMessageReactionResponse'),
+          schema: CreateMessageReactionResponseSchema.openapi('CreateMessageReactionResponse'),
         },
       },
     },
@@ -448,9 +403,7 @@ registry.registerPath({
       description: 'Invalid request body',
       content: {
         'application/json': {
-          schema: z.object({
-            error: z.string(),
-          }),
+          schema: ErrorResponseSchema,
         },
       },
     },
@@ -458,9 +411,7 @@ registry.registerPath({
       description: 'Not authenticated',
       content: {
         'application/json': {
-          schema: z.object({
-            error: z.string(),
-          }),
+          schema: ErrorResponseSchema,
         },
       },
     },
@@ -468,9 +419,7 @@ registry.registerPath({
       description: 'Not a member of the channel',
       content: {
         'application/json': {
-          schema: z.object({
-            error: z.string(),
-          }),
+          schema: ErrorResponseSchema,
         },
       },
     },
@@ -478,9 +427,7 @@ registry.registerPath({
       description: 'Message not found',
       content: {
         'application/json': {
-          schema: z.object({
-            error: z.string(),
-          }),
+          schema: ErrorResponseSchema,
         },
       },
     },

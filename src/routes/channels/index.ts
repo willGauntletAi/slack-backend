@@ -5,24 +5,20 @@ import { authenticate, AuthRequest } from '../../middleware/auth';
 import { registry } from '../../utils/openapi';
 import { createChannel, listChannelsInWorkspace, updateChannel, addChannelMember, removeChannelMember, getChannelById, listUserChannels } from '../../db/channels';
 import { findUserById } from '../../db/users';
+import {
+  createChannelSchema,
+  updateChannelSchema,
+  CreateChannelResponseSchema,
+  ListChannelsResponseSchema,
+  ListUserChannelsResponseSchema,
+  UpdateChannelResponseSchema,
+  SuccessMessageSchema,
+  ErrorResponseSchema,
+} from './types';
 
 const router = Router();
 
-// Schema for creating a channel
-const createChannelSchema = z.object({
-  name: z.string().min(1).max(100).nullable(),
-  is_private: z.boolean().default(false),
-  member_ids: z.array(z.string()).min(1),
-});
-
 type CreateChannelBody = z.infer<typeof createChannelSchema>;
-
-// Schema for updating a channel
-const updateChannelSchema = z.object({
-  name: z.string().min(1).max(100).nullable().optional(),
-  is_private: z.boolean().optional(),
-});
-
 type UpdateChannelBody = z.infer<typeof updateChannelSchema>;
 
 // POST /channel/workspace/:id - Create a channel in a workspace
@@ -55,13 +51,7 @@ registry.registerPath({
       description: 'Channel created successfully',
       content: {
         'application/json': {
-          schema: z.object({
-            id: z.string(),
-            name: z.string(),
-            is_private: z.boolean(),
-            created_at: z.string(),
-            updated_at: z.string(),
-          }).openapi('CreateChannelResponse'),
+          schema: CreateChannelResponseSchema.openapi('CreateChannelResponse'),
         },
       },
     },
@@ -69,9 +59,7 @@ registry.registerPath({
       description: 'Invalid request body',
       content: {
         'application/json': {
-          schema: z.object({
-            error: z.string(),
-          }),
+          schema: ErrorResponseSchema,
         },
       },
     },
@@ -79,9 +67,7 @@ registry.registerPath({
       description: 'Not authenticated',
       content: {
         'application/json': {
-          schema: z.object({
-            error: z.string(),
-          }),
+          schema: ErrorResponseSchema,
         },
       },
     },
@@ -89,9 +75,7 @@ registry.registerPath({
       description: 'Not a member of the workspace',
       content: {
         'application/json': {
-          schema: z.object({
-            error: z.string(),
-          }),
+          schema: ErrorResponseSchema,
         },
       },
     },
@@ -99,9 +83,7 @@ registry.registerPath({
       description: 'Workspace not found',
       content: {
         'application/json': {
-          schema: z.object({
-            error: z.string(),
-          }),
+          schema: ErrorResponseSchema,
         },
       },
     },
@@ -167,14 +149,7 @@ registry.registerPath({
       description: 'List of channels retrieved successfully',
       content: {
         'application/json': {
-          schema: z.array(z.object({
-            id: z.string(),
-            name: z.string(),
-            is_private: z.boolean(),
-            created_at: z.string(),
-            updated_at: z.string(),
-            usernames: z.array(z.string()),
-          })).openapi('ListChannelsResponse'),
+          schema: ListChannelsResponseSchema.openapi('ListChannelsResponse'),
         },
       },
     },
@@ -182,9 +157,7 @@ registry.registerPath({
       description: 'Not authenticated',
       content: {
         'application/json': {
-          schema: z.object({
-            error: z.string(),
-          }),
+          schema: ErrorResponseSchema,
         },
       },
     },
@@ -192,9 +165,7 @@ registry.registerPath({
       description: 'Not a member of the workspace',
       content: {
         'application/json': {
-          schema: z.object({
-            error: z.string(),
-          }),
+          schema: ErrorResponseSchema,
         },
       },
     },
@@ -202,9 +173,7 @@ registry.registerPath({
       description: 'Workspace not found',
       content: {
         'application/json': {
-          schema: z.object({
-            error: z.string(),
-          }),
+          schema: ErrorResponseSchema,
         },
       },
     },
@@ -262,22 +231,7 @@ registry.registerPath({
       description: 'List of channels retrieved successfully',
       content: {
         'application/json': {
-          schema: z.array(z.object({
-            id: z.string(),
-            name: z.string().nullable(),
-            is_private: z.boolean(),
-            created_at: z.string(),
-            updated_at: z.string(),
-            workspace_id: z.string(),
-            workspace_name: z.string(),
-            members: z.array(z.object({
-              id: z.string(),
-              username: z.string(),
-              email: z.string(),
-              created_at: z.string(),
-              updated_at: z.string(),
-            })),
-          })).openapi('ListUserChannelsResponse'),
+          schema: ListUserChannelsResponseSchema.openapi('ListUserChannelsResponse'),
         },
       },
     },
@@ -285,9 +239,7 @@ registry.registerPath({
       description: 'Not authenticated',
       content: {
         'application/json': {
-          schema: z.object({
-            error: z.string(),
-          }),
+          schema: ErrorResponseSchema,
         },
       },
     },
@@ -348,13 +300,7 @@ registry.registerPath({
       description: 'Channel updated successfully',
       content: {
         'application/json': {
-          schema: z.object({
-            id: z.string(),
-            name: z.string(),
-            is_private: z.boolean(),
-            created_at: z.string(),
-            updated_at: z.string(),
-          }).openapi('UpdateChannelResponse'),
+          schema: UpdateChannelResponseSchema.openapi('UpdateChannelResponse'),
         },
       },
     },
@@ -362,9 +308,7 @@ registry.registerPath({
       description: 'Invalid request body',
       content: {
         'application/json': {
-          schema: z.object({
-            error: z.string(),
-          }),
+          schema: ErrorResponseSchema,
         },
       },
     },
@@ -372,9 +316,7 @@ registry.registerPath({
       description: 'Not authenticated',
       content: {
         'application/json': {
-          schema: z.object({
-            error: z.string(),
-          }),
+          schema: ErrorResponseSchema,
         },
       },
     },
@@ -382,9 +324,7 @@ registry.registerPath({
       description: 'Not a member of the channel',
       content: {
         'application/json': {
-          schema: z.object({
-            error: z.string(),
-          }),
+          schema: ErrorResponseSchema,
         },
       },
     },
@@ -392,9 +332,7 @@ registry.registerPath({
       description: 'Channel not found',
       content: {
         'application/json': {
-          schema: z.object({
-            error: z.string(),
-          }),
+          schema: ErrorResponseSchema,
         },
       },
     },
@@ -453,9 +391,7 @@ registry.registerPath({
       description: 'Member added successfully',
       content: {
         'application/json': {
-          schema: z.object({
-            message: z.string(),
-          }),
+          schema: SuccessMessageSchema,
         },
       },
     },
@@ -463,9 +399,7 @@ registry.registerPath({
       description: 'Not authenticated',
       content: {
         'application/json': {
-          schema: z.object({
-            error: z.string(),
-          }),
+          schema: ErrorResponseSchema,
         },
       },
     },
@@ -473,9 +407,7 @@ registry.registerPath({
       description: 'Not authorized to add members',
       content: {
         'application/json': {
-          schema: z.object({
-            error: z.string(),
-          }),
+          schema: ErrorResponseSchema,
         },
       },
     },
@@ -483,9 +415,7 @@ registry.registerPath({
       description: 'Channel or user not found',
       content: {
         'application/json': {
-          schema: z.object({
-            error: z.string(),
-          }),
+          schema: ErrorResponseSchema,
         },
       },
     },
@@ -564,9 +494,7 @@ registry.registerPath({
       description: 'Member removed successfully',
       content: {
         'application/json': {
-          schema: z.object({
-            message: z.string(),
-          }),
+          schema: SuccessMessageSchema,
         },
       },
     },
@@ -574,9 +502,7 @@ registry.registerPath({
       description: 'Not authenticated',
       content: {
         'application/json': {
-          schema: z.object({
-            error: z.string(),
-          }),
+          schema: ErrorResponseSchema,
         },
       },
     },
@@ -584,9 +510,7 @@ registry.registerPath({
       description: 'Not authorized to remove members',
       content: {
         'application/json': {
-          schema: z.object({
-            error: z.string(),
-          }),
+          schema: ErrorResponseSchema,
         },
       },
     },
@@ -594,9 +518,7 @@ registry.registerPath({
       description: 'Channel or user not found',
       content: {
         'application/json': {
-          schema: z.object({
-            error: z.string(),
-          }),
+          schema: ErrorResponseSchema,
         },
       },
     },

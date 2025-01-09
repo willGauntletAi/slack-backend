@@ -8,23 +8,19 @@ import { createRefreshToken, findRefreshToken, revokeRefreshToken, revokeAllUser
 import { jwtConfig } from '../../config/jwt';
 import { authenticate, AuthRequest } from '../../middleware/auth';
 import { registry } from '../../utils/openapi';
+import {
+  registerSchema,
+  loginSchema,
+  refreshSchema,
+  RegisterResponseSchema,
+  LoginResponseSchema,
+  RefreshResponseSchema,
+  LogoutResponseSchema,
+  LogoutAllResponseSchema,
+  ErrorResponseSchema,
+} from './types';
 
 const router = Router();
-
-const registerSchema = z.object({
-  username: z.string().min(3).max(50),
-  email: z.string().email(),
-  password: z.string().min(8),
-});
-
-const loginSchema = z.object({
-  email: z.string().email(),
-  password: z.string(),
-});
-
-const refreshSchema = z.object({
-  refreshToken: z.string(),
-});
 
 type RegisterBody = z.infer<typeof registerSchema>;
 type LoginBody = z.infer<typeof loginSchema>;
@@ -54,45 +50,31 @@ registry.registerPath({
   path: '/auth/register',
   tags: ['auth'],
   summary: 'Register a new user account',
-  request: {body: {content: {'application/json': {schema: registerSchema}}}},
+  request: { body: { content: { 'application/json': { schema: registerSchema } } } },
   responses: {
     '201': {
       description: 'User registered successfully',
       content: {
         'application/json': {
-          schema: z.object({
-            user: z.object({
-              id: z.string(),
-              username: z.string(),
-              email: z.string(),
-              created_at: z.string(),
-              updated_at: z.string(),
-            }),
-            accessToken: z.string(),
-            refreshToken: z.string(),
-          }).openapi('RegisterResponse'),
+          schema: RegisterResponseSchema.openapi('RegisterResponse'),
         },
       },
     },
     '400': {
-        description: 'Bad Request',
-        content: {
-            'application/json': {
-                schema: z.object({
-                    error: z.string(),
-                }).openapi('RegisterErrorResponse'),
-            },
+      description: 'Bad Request',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
         },
+      },
     },
     '500': {
-        description: 'Internal Server Error',
-        content: {
-            'application/json': {
-                schema: z.object({
-                    error: z.string(),
-                }).openapi('RegisterInternalServerErrorResponse'),
-            },
+      description: 'Internal Server Error',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
         },
+      },
     },
   },
 });
@@ -170,15 +152,7 @@ registry.registerPath({
       description: 'Login successful',
       content: {
         'application/json': {
-          schema: z.object({
-            user: z.object({
-              id: z.string(),
-              username: z.string(),
-              email: z.string(),
-            }),
-            accessToken: z.string(),
-            refreshToken: z.string(),
-          }).openapi('LoginResponse'),
+          schema: LoginResponseSchema.openapi('LoginResponse'),
         },
       },
     },
@@ -186,9 +160,7 @@ registry.registerPath({
       description: 'Invalid credentials',
       content: {
         'application/json': {
-          schema: z.object({
-            error: z.string(),
-          }).openapi('LoginErrorResponse'),
+          schema: ErrorResponseSchema,
         },
       },
     },
@@ -196,9 +168,7 @@ registry.registerPath({
       description: 'Internal Server Error',
       content: {
         'application/json': {
-          schema: z.object({
-            error: z.string(),
-          }).openapi('LoginInternalServerErrorResponse'),
+          schema: ErrorResponseSchema,
         },
       },
     },
@@ -268,10 +238,7 @@ registry.registerPath({
       description: 'Token refresh successful',
       content: {
         'application/json': {
-          schema: z.object({
-            accessToken: z.string(),
-            refreshToken: z.string(),
-          }).openapi('RefreshResponse'),
+          schema: RefreshResponseSchema.openapi('RefreshResponse'),
         },
       },
     },
@@ -279,9 +246,7 @@ registry.registerPath({
       description: 'Invalid refresh token',
       content: {
         'application/json': {
-          schema: z.object({
-            error: z.string(),
-          }).openapi('RefreshErrorResponse'),
+          schema: ErrorResponseSchema,
         },
       },
     },
@@ -289,9 +254,7 @@ registry.registerPath({
       description: 'Internal Server Error',
       content: {
         'application/json': {
-          schema: z.object({
-            error: z.string(),
-          }).openapi('RefreshInternalServerErrorResponse'),
+          schema: ErrorResponseSchema,
         },
       },
     },
@@ -351,9 +314,7 @@ registry.registerPath({
       description: 'Logout successful',
       content: {
         'application/json': {
-          schema: z.object({
-            message: z.string(),
-          }).openapi('LogoutResponse'),
+          schema: LogoutResponseSchema.openapi('LogoutResponse'),
         },
       },
     },
@@ -361,9 +322,7 @@ registry.registerPath({
       description: 'Not authenticated',
       content: {
         'application/json': {
-          schema: z.object({
-            error: z.string(),
-          }).openapi('LogoutErrorResponse'),
+          schema: ErrorResponseSchema,
         },
       },
     },
@@ -371,9 +330,7 @@ registry.registerPath({
       description: 'Internal Server Error',
       content: {
         'application/json': {
-          schema: z.object({
-            error: z.string(),
-          }).openapi('LogoutInternalServerErrorResponse'),
+          schema: ErrorResponseSchema,
         },
       },
     },
@@ -405,9 +362,7 @@ registry.registerPath({
       description: 'Logged out from all devices',
       content: {
         'application/json': {
-          schema: z.object({
-            message: z.string(),
-          }).openapi('LogoutAllResponse'),
+          schema: LogoutAllResponseSchema.openapi('LogoutAllResponse'),
         },
       },
     },
@@ -415,9 +370,7 @@ registry.registerPath({
       description: 'Not authenticated',
       content: {
         'application/json': {
-          schema: z.object({
-            error: z.string(),
-          }).openapi('LogoutAllErrorResponse'),
+          schema: ErrorResponseSchema,
         },
       },
     },
@@ -425,9 +378,7 @@ registry.registerPath({
       description: 'Internal Server Error',
       content: {
         'application/json': {
-          schema: z.object({
-            error: z.string(),
-          }).openapi('LogoutAllInternalServerErrorResponse'),
+          schema: ErrorResponseSchema,
         },
       },
     },

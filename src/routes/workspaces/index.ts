@@ -5,21 +5,20 @@ import { authenticate, AuthRequest } from '../../middleware/auth';
 import { registry } from '../../utils/openapi';
 import { createWorkspace, listWorkspacesForUser, getWorkspaceById, isWorkspaceMember, inviteUserByEmail, acceptWorkspaceInvite, removeWorkspaceMember } from '../../db/workspaces';
 import { findUserById } from '../../db/users';
+import {
+  createWorkspaceSchema,
+  inviteUserSchema,
+  CreateWorkspaceResponseSchema,
+  ListWorkspacesResponseSchema,
+  InviteUserResponseSchema,
+  AcceptInviteResponseSchema,
+  RemoveWorkspaceMemberResponseSchema,
+  ErrorResponseSchema,
+} from './types';
 
 const router = Router();
 
-// Schema for creating a workspace
-const createWorkspaceSchema = z.object({
-  name: z.string().min(1).max(100),
-});
-
 type CreateWorkspaceBody = z.infer<typeof createWorkspaceSchema>;
-
-// Schema for inviting a user
-const inviteUserSchema = z.object({
-  email: z.string().email(),
-});
-
 type InviteUserBody = z.infer<typeof inviteUserSchema>;
 
 // POST /workspace - Create a new workspace
@@ -43,12 +42,7 @@ registry.registerPath({
       description: 'Workspace created successfully',
       content: {
         'application/json': {
-          schema: z.object({
-            id: z.string(),
-            name: z.string(),
-            created_at: z.string(),
-            updated_at: z.string(),
-          }).openapi('CreateWorkspaceResponse'),
+          schema: CreateWorkspaceResponseSchema.openapi('CreateWorkspaceResponse'),
         },
       },
     },
@@ -56,9 +50,7 @@ registry.registerPath({
       description: 'Invalid request body',
       content: {
         'application/json': {
-          schema: z.object({
-            error: z.string(),
-          }),
+          schema: ErrorResponseSchema,
         },
       },
     },
@@ -66,9 +58,7 @@ registry.registerPath({
       description: 'Not authenticated',
       content: {
         'application/json': {
-          schema: z.object({
-            error: z.string(),
-          }),
+          schema: ErrorResponseSchema,
         },
       },
     },
@@ -107,13 +97,7 @@ registry.registerPath({
       description: 'List of workspaces retrieved successfully',
       content: {
         'application/json': {
-          schema: z.array(z.object({
-            id: z.string(),
-            name: z.string(),
-            created_at: z.string(),
-            updated_at: z.string(),
-            role: z.string(),
-          })).openapi('ListWorkspacesResponse'),
+          schema: ListWorkspacesResponseSchema.openapi('ListWorkspacesResponse'),
         },
       },
     },
@@ -121,9 +105,7 @@ registry.registerPath({
       description: 'Not authenticated',
       content: {
         'application/json': {
-          schema: z.object({
-            error: z.string(),
-          }),
+          schema: ErrorResponseSchema,
         },
       },
     },
@@ -175,9 +157,7 @@ registry.registerPath({
       description: 'User invited successfully',
       content: {
         'application/json': {
-          schema: z.object({
-            message: z.string(),
-          }).openapi('InviteUserResponse'),
+          schema: InviteUserResponseSchema.openapi('InviteUserResponse'),
         },
       },
     },
@@ -185,9 +165,7 @@ registry.registerPath({
       description: 'Invalid request body',
       content: {
         'application/json': {
-          schema: z.object({
-            error: z.string(),
-          }),
+          schema: ErrorResponseSchema,
         },
       },
     },
@@ -195,9 +173,7 @@ registry.registerPath({
       description: 'Not authenticated',
       content: {
         'application/json': {
-          schema: z.object({
-            error: z.string(),
-          }),
+          schema: ErrorResponseSchema,
         },
       },
     },
@@ -205,9 +181,7 @@ registry.registerPath({
       description: 'Not authorized to invite members',
       content: {
         'application/json': {
-          schema: z.object({
-            error: z.string(),
-          }),
+          schema: ErrorResponseSchema,
         },
       },
     },
@@ -215,9 +189,7 @@ registry.registerPath({
       description: 'User or workspace not found',
       content: {
         'application/json': {
-          schema: z.object({
-            error: z.string(),
-          }),
+          schema: ErrorResponseSchema,
         },
       },
     },
@@ -278,16 +250,7 @@ registry.registerPath({
       description: 'Invitation accepted successfully',
       content: {
         'application/json': {
-          schema: z.object({
-            message: z.string(),
-            membership: z.object({
-              workspace_id: z.string(),
-              user_id: z.string(),
-              role: z.string(),
-              joined_at: z.string(),
-              updated_at: z.string(),
-            }),
-          }).openapi('AcceptInviteResponse'),
+          schema: AcceptInviteResponseSchema.openapi('AcceptInviteResponse'),
         },
       },
     },
@@ -295,9 +258,7 @@ registry.registerPath({
       description: 'Not authenticated',
       content: {
         'application/json': {
-          schema: z.object({
-            error: z.string(),
-          }),
+          schema: ErrorResponseSchema,
         },
       },
     },
@@ -305,9 +266,7 @@ registry.registerPath({
       description: 'No invitation found',
       content: {
         'application/json': {
-          schema: z.object({
-            error: z.string(),
-          }),
+          schema: ErrorResponseSchema,
         },
       },
     },
@@ -315,9 +274,7 @@ registry.registerPath({
       description: 'Already a member or other error',
       content: {
         'application/json': {
-          schema: z.object({
-            error: z.string(),
-          }),
+          schema: ErrorResponseSchema,
         },
       },
     },
@@ -341,7 +298,7 @@ const acceptInviteHandler: RequestHandler<{ id: string }> = async (req: AuthRequ
     }
 
     const membership = await acceptWorkspaceInvite(workspaceId, req.user.id);
-    res.json({ 
+    res.json({
       message: 'Invitation accepted successfully',
       membership,
     });
@@ -389,9 +346,7 @@ registry.registerPath({
       description: 'Member removed successfully',
       content: {
         'application/json': {
-          schema: z.object({
-            message: z.string(),
-          }).openapi('RemoveWorkspaceMemberResponse'),
+          schema: RemoveWorkspaceMemberResponseSchema.openapi('RemoveWorkspaceMemberResponse'),
         },
       },
     },
@@ -399,9 +354,7 @@ registry.registerPath({
       description: 'Not authenticated',
       content: {
         'application/json': {
-          schema: z.object({
-            error: z.string(),
-          }),
+          schema: ErrorResponseSchema,
         },
       },
     },
@@ -409,9 +362,7 @@ registry.registerPath({
       description: 'Not authorized to remove members or cannot remove last admin',
       content: {
         'application/json': {
-          schema: z.object({
-            error: z.string(),
-          }),
+          schema: ErrorResponseSchema,
         },
       },
     },
@@ -419,9 +370,7 @@ registry.registerPath({
       description: 'Workspace or user not found, or user is not a member',
       content: {
         'application/json': {
-          schema: z.object({
-            error: z.string(),
-          }),
+          schema: ErrorResponseSchema,
         },
       },
     },

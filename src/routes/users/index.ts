@@ -6,18 +6,26 @@ import { registry } from '../../utils/openapi';
 import { findUserById, updateUser, checkUsersShareWorkspace, getWorkspaceUsers, getChannelUsers } from '../../db/users';
 import { isWorkspaceMember, getWorkspaceById } from '../../db/workspaces';
 import { isChannelMember, getChannelById } from '../../db/channels';
+import {
+  updateProfileSchema,
+  UserProfileResponseSchema,
+  GetUserByIdResponseSchema,
+  UpdateProfileResponseSchema,
+  GetWorkspaceUsersResponseSchema,
+  GetChannelUsersResponseSchema,
+  ErrorResponseSchema,
+  UpdateProfileRequest,
+  UserProfileResponse,
+  GetUserByIdResponse,
+  UpdateProfileResponse,
+  GetWorkspaceUsersResponse,
+  GetChannelUsersResponse,
+  ErrorResponse,
+} from './types';
 
 const router = Router();
 
-// Schema for updating user profile
-const updateProfileSchema = z.object({
-  username: z.string().min(3).max(50).optional(),
-  email: z.string().email().optional(),
-}).refine(data => Object.keys(data).length > 0, {
-  message: "At least one field must be provided"
-});
-
-type UpdateProfileBody = z.infer<typeof updateProfileSchema>;
+type UpdateProfileBody = UpdateProfileRequest;
 
 // GET /users/me - Get current user's profile
 registry.registerPath({
@@ -31,13 +39,7 @@ registry.registerPath({
       description: 'User profile retrieved successfully',
       content: {
         'application/json': {
-          schema: z.object({
-            id: z.string(),
-            username: z.string(),
-            email: z.string(),
-            created_at: z.string(),
-            updated_at: z.string(),
-          }).openapi('UserProfileResponse'),
+          schema: UserProfileResponseSchema.openapi('UserProfileResponse'),
         },
       },
     },
@@ -45,9 +47,7 @@ registry.registerPath({
       description: 'Not authenticated',
       content: {
         'application/json': {
-          schema: z.object({
-            error: z.string(),
-          }).openapi('UserProfileErrorResponse'),
+          schema: ErrorResponseSchema,
         },
       },
     },
@@ -55,16 +55,14 @@ registry.registerPath({
       description: 'Internal Server Error',
       content: {
         'application/json': {
-          schema: z.object({
-            error: z.string(),
-          }).openapi('UserProfileInternalServerErrorResponse'),
+          schema: ErrorResponseSchema,
         },
       },
     },
   },
 });
 
-const getMeHandler: RequestHandler = async (req: AuthRequest, res) => {
+const getMeHandler: RequestHandler<{}, UserProfileResponse | ErrorResponse> = async (req: AuthRequest, res) => {
   try {
     if (!req.user?.id) {
       res.status(401).json({ error: 'Not authenticated' });
@@ -77,9 +75,14 @@ const getMeHandler: RequestHandler = async (req: AuthRequest, res) => {
       return;
     }
 
-    // Don't send password hash in response
+    // Don't send password hash in response and format dates as ISO strings
     const { password_hash, deleted_at, ...userWithoutSensitiveData } = user;
-    res.json(userWithoutSensitiveData);
+    const response: UserProfileResponse = {
+      ...userWithoutSensitiveData,
+      created_at: userWithoutSensitiveData.created_at.toISOString(),
+      updated_at: userWithoutSensitiveData.updated_at.toISOString(),
+    };
+    res.json(response);
   } catch (error) {
     console.error('Get profile error:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -108,13 +111,7 @@ registry.registerPath({
       description: 'User profile retrieved successfully',
       content: {
         'application/json': {
-          schema: z.object({
-            id: z.string(),
-            username: z.string(),
-            email: z.string(),
-            created_at: z.string(),
-            updated_at: z.string(),
-          }).openapi('GetUserByIdResponse'),
+          schema: GetUserByIdResponseSchema.openapi('GetUserByIdResponse'),
         },
       },
     },
@@ -122,9 +119,7 @@ registry.registerPath({
       description: 'Not authenticated',
       content: {
         'application/json': {
-          schema: z.object({
-            error: z.string(),
-          }).openapi('GetUserByIdErrorResponse'),
+          schema: ErrorResponseSchema,
         },
       },
     },
@@ -132,9 +127,7 @@ registry.registerPath({
       description: 'Users do not share a workspace',
       content: {
         'application/json': {
-          schema: z.object({
-            error: z.string(),
-          }).openapi('GetUserByIdForbiddenResponse'),
+          schema: ErrorResponseSchema,
         },
       },
     },
@@ -142,9 +135,7 @@ registry.registerPath({
       description: 'User not found',
       content: {
         'application/json': {
-          schema: z.object({
-            error: z.string(),
-          }).openapi('GetUserByIdNotFoundResponse'),
+          schema: ErrorResponseSchema,
         },
       },
     },
@@ -152,16 +143,14 @@ registry.registerPath({
       description: 'Internal Server Error',
       content: {
         'application/json': {
-          schema: z.object({
-            error: z.string(),
-          }).openapi('GetUserByIdInternalServerErrorResponse'),
+          schema: ErrorResponseSchema,
         },
       },
     },
   },
 });
 
-const getUserByIdHandler: RequestHandler<{ id: string }> = async (req: AuthRequest, res) => {
+const getUserByIdHandler: RequestHandler<{ id: string }, GetUserByIdResponse | ErrorResponse> = async (req: AuthRequest, res) => {
   try {
     if (!req.user?.id) {
       res.status(401).json({ error: 'Not authenticated' });
@@ -181,9 +170,14 @@ const getUserByIdHandler: RequestHandler<{ id: string }> = async (req: AuthReque
       return;
     }
 
-    // Don't send password hash in response
+    // Don't send password hash in response and format dates as ISO strings
     const { password_hash, deleted_at, ...userWithoutSensitiveData } = targetUser;
-    res.json(userWithoutSensitiveData);
+    const response: GetUserByIdResponse = {
+      ...userWithoutSensitiveData,
+      created_at: userWithoutSensitiveData.created_at.toISOString(),
+      updated_at: userWithoutSensitiveData.updated_at.toISOString(),
+    };
+    res.json(response);
   } catch (error) {
     console.error('Get user by id error:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -211,13 +205,7 @@ registry.registerPath({
       description: 'Profile updated successfully',
       content: {
         'application/json': {
-          schema: z.object({
-            id: z.string(),
-            username: z.string(),
-            email: z.string(),
-            created_at: z.string(),
-            updated_at: z.string(),
-          }).openapi('UpdateProfileResponse'),
+          schema: UpdateProfileResponseSchema.openapi('UpdateProfileResponse'),
         },
       },
     },
@@ -225,9 +213,7 @@ registry.registerPath({
       description: 'Invalid request body',
       content: {
         'application/json': {
-          schema: z.object({
-            error: z.string(),
-          }).openapi('UpdateProfileBadRequestResponse'),
+          schema: ErrorResponseSchema,
         },
       },
     },
@@ -235,9 +221,7 @@ registry.registerPath({
       description: 'Not authenticated',
       content: {
         'application/json': {
-          schema: z.object({
-            error: z.string(),
-          }).openapi('UpdateProfileUnauthorizedResponse'),
+          schema: ErrorResponseSchema,
         },
       },
     },
@@ -245,16 +229,14 @@ registry.registerPath({
       description: 'Internal Server Error',
       content: {
         'application/json': {
-          schema: z.object({
-            error: z.string(),
-          }).openapi('UpdateProfileInternalServerErrorResponse'),
+          schema: ErrorResponseSchema,
         },
       },
     },
   },
 });
 
-const updateProfileHandler: RequestHandler<{}, {}, UpdateProfileBody> = async (req: AuthRequest, res) => {
+const updateProfileHandler: RequestHandler<{}, UpdateProfileResponse | ErrorResponse, UpdateProfileBody> = async (req: AuthRequest, res) => {
   try {
     if (!req.user?.id) {
       res.status(401).json({ error: 'Not authenticated' });
@@ -269,12 +251,17 @@ const updateProfileHandler: RequestHandler<{}, {}, UpdateProfileBody> = async (r
       return;
     }
 
-    // Don't send password hash in response
+    // Don't send password hash in response and format dates as ISO strings
     const { password_hash, deleted_at, ...userWithoutSensitiveData } = updatedUser;
-    res.json(userWithoutSensitiveData);
+    const response: UpdateProfileResponse = {
+      ...userWithoutSensitiveData,
+      created_at: userWithoutSensitiveData.created_at.toISOString(),
+      updated_at: userWithoutSensitiveData.updated_at.toISOString(),
+    };
+    res.json(response);
   } catch (error) {
     if (error instanceof z.ZodError) {
-      res.status(400).json({ error: error.errors });
+      res.status(400).json({ error: error.errors.map(e => e.message).join(', ') });
       return;
     }
     console.error('Update profile error:', error);
@@ -310,13 +297,7 @@ registry.registerPath({
       description: 'List of workspace users retrieved successfully',
       content: {
         'application/json': {
-          schema: z.array(z.object({
-            id: z.string(),
-            username: z.string(),
-            email: z.string(),
-            joined_at: z.string(),
-            role: z.string(),
-          })).openapi('GetWorkspaceUsersResponse'),
+          schema: GetWorkspaceUsersResponseSchema.openapi('GetWorkspaceUsersResponse'),
         },
       },
     },
@@ -324,9 +305,7 @@ registry.registerPath({
       description: 'Not authenticated',
       content: {
         'application/json': {
-          schema: z.object({
-            error: z.string(),
-          }),
+          schema: ErrorResponseSchema,
         },
       },
     },
@@ -334,9 +313,7 @@ registry.registerPath({
       description: 'Not a member of the workspace',
       content: {
         'application/json': {
-          schema: z.object({
-            error: z.string(),
-          }),
+          schema: ErrorResponseSchema,
         },
       },
     },
@@ -344,16 +321,14 @@ registry.registerPath({
       description: 'Workspace not found',
       content: {
         'application/json': {
-          schema: z.object({
-            error: z.string(),
-          }),
+          schema: ErrorResponseSchema,
         },
       },
     },
   },
 });
 
-const getWorkspaceUsersHandler: RequestHandler<{ id: string }> = async (req: AuthRequest, res) => {
+const getWorkspaceUsersHandler: RequestHandler<{ id: string }, GetWorkspaceUsersResponse | ErrorResponse> = async (req: AuthRequest, res) => {
   try {
     if (!req.user?.id) {
       res.status(401).json({ error: 'Not authenticated' });
@@ -375,7 +350,11 @@ const getWorkspaceUsersHandler: RequestHandler<{ id: string }> = async (req: Aut
     }
 
     const users = await getWorkspaceUsers(req.params.id, req.query.search as string | undefined);
-    res.json(users);
+    const response: GetWorkspaceUsersResponse = users.map(user => ({
+      ...user,
+      joined_at: user.joined_at.toISOString(),
+    }));
+    res.json(response);
   } catch (error) {
     console.error('Get workspace users error:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -410,12 +389,7 @@ registry.registerPath({
       description: 'List of channel users retrieved successfully',
       content: {
         'application/json': {
-          schema: z.array(z.object({
-            id: z.string(),
-            username: z.string(),
-            email: z.string(),
-            joined_at: z.string(),
-          })).openapi('GetChannelUsersResponse'),
+          schema: GetChannelUsersResponseSchema.openapi('GetChannelUsersResponse'),
         },
       },
     },
@@ -423,9 +397,7 @@ registry.registerPath({
       description: 'Not authenticated',
       content: {
         'application/json': {
-          schema: z.object({
-            error: z.string(),
-          }),
+          schema: ErrorResponseSchema,
         },
       },
     },
@@ -433,9 +405,7 @@ registry.registerPath({
       description: 'Not a member of the channel',
       content: {
         'application/json': {
-          schema: z.object({
-            error: z.string(),
-          }),
+          schema: ErrorResponseSchema,
         },
       },
     },
@@ -443,16 +413,14 @@ registry.registerPath({
       description: 'Channel not found',
       content: {
         'application/json': {
-          schema: z.object({
-            error: z.string(),
-          }),
+          schema: ErrorResponseSchema,
         },
       },
     },
   },
 });
 
-const getChannelUsersHandler: RequestHandler<{ id: string }> = async (req: AuthRequest, res) => {
+const getChannelUsersHandler: RequestHandler<{ id: string }, GetChannelUsersResponse | ErrorResponse> = async (req: AuthRequest, res) => {
   try {
     if (!req.user?.id) {
       res.status(401).json({ error: 'Not authenticated' });
@@ -474,7 +442,11 @@ const getChannelUsersHandler: RequestHandler<{ id: string }> = async (req: AuthR
     }
 
     const users = await getChannelUsers(req.params.id, req.query.search as string | undefined);
-    res.json(users);
+    const response: GetChannelUsersResponse = users.map(user => ({
+      ...user,
+      joined_at: user.joined_at.toISOString(),
+    }));
+    res.json(response);
   } catch (error) {
     console.error('Get channel users error:', error);
     res.status(500).json({ error: 'Internal server error' });
