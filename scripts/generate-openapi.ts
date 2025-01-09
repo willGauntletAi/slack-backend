@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { writeFileSync } from 'fs';
+import { writeFileSync, copyFileSync } from 'fs';
 import { join } from 'path';
 import { extendZodWithOpenApi } from "@asteasolutions/zod-to-openapi";
 import { z } from "zod";
@@ -31,14 +31,8 @@ import { clientMessageSchema, serverMessageSchema } from '../src/websocket/types
 
 console.log(`OpenAPI document saved to ${outputPath}`);
 
-const wsTypes = {
-  clientMessages: clientMessageSchema,
-  serverMessages: serverMessageSchema
-};
-
-const wsTypesJson = JSON.stringify(wsTypes, null, 2);
-const wsTypesPath = join(__dirname, '../../slack_frontend/ws-types.json');
-writeFileSync(wsTypesPath, wsTypesJson);
+const wsTypesPath = join(__dirname, '../../slack_frontend/ws-types.ts');
+copyFileSync(join(__dirname, '../src/websocket/types.ts'), wsTypesPath);
 
 console.log(`WebSocket types saved to ${wsTypesPath}`);
 
