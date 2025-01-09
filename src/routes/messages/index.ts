@@ -161,7 +161,12 @@ registry.registerPath({
   },
 });
 
-const listMessagesHandler: RequestHandler<{ id: string }> = async (req: AuthRequest, res) => {
+const listMessagesHandler: RequestHandler<
+  { id: string },
+  z.infer<typeof ListMessagesResponseSchema> | { error: string },
+  {},
+  { limit?: string; before?: string }
+> = async (req: AuthRequest, res) => {
   try {
     if (!req.user?.id) {
       res.status(401).json({ error: 'Not authenticated' });
@@ -172,7 +177,17 @@ const listMessagesHandler: RequestHandler<{ id: string }> = async (req: AuthRequ
     const before = typeof req.query.before === 'string' ? req.query.before : undefined;
 
     const messages = await listChannelMessages(req.params.id, req.user.id, limit, before);
-    res.json(messages);
+    const formattedMessages = messages.map(msg => ({
+      ...msg,
+      created_at: msg.created_at.toISOString(),
+      updated_at: msg.updated_at.toISOString(),
+      parent_id: msg.parent_id?.toString() || null,
+      reactions: msg.reactions.map(reaction => ({
+        ...reaction,
+        message_id: reaction.message_id.toString(),
+      })),
+    }));
+    res.json(formattedMessages);
   } catch (error) {
     if (error instanceof Error && error.message === 'Not a member of this channel') {
       res.status(403).json({ error: error.message });
