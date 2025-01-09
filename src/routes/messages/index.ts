@@ -4,7 +4,7 @@ import type { RequestHandler } from 'express';
 import { authenticate, AuthRequest } from '../../middleware/auth';
 import { registry } from '../../utils/openapi';
 import { createMessage, listChannelMessages, updateMessage, deleteMessage } from '../../db/messages';
-import { addMessageReaction } from '../../db/message-reactions';
+import { addMessageReaction, deleteMessageReaction } from '../../db/message-reactions';
 import {
   createMessageSchema,
   updateMessageSchema,
@@ -482,10 +482,100 @@ const addReactionHandler: RequestHandler<{ id: string }, {}, z.infer<typeof crea
   }
 };
 
+// DELETE /message/:id/reaction/:reactionId - Delete a reaction from a message
+registry.registerPath({
+  method: 'delete',
+  path: '/message/{id}/reaction/{reactionId}',
+  tags: ['messages'],
+  summary: 'Delete a reaction from a message',
+  security: [{ bearerAuth: [] }],
+  parameters: [
+    {
+      name: 'id',
+      in: 'path',
+      required: true,
+      schema: { type: 'string' },
+      description: 'Message ID',
+    },
+    {
+      name: 'reactionId',
+      in: 'path',
+      required: true,
+      schema: { type: 'string' },
+      description: 'Reaction ID',
+    },
+  ],
+  responses: {
+    '200': {
+      description: 'Reaction deleted successfully',
+      content: {
+        'application/json': {
+          schema: z.object({
+            message: z.string(),
+          }).openapi('DeleteReactionResponse'),
+        },
+      },
+    },
+    '401': {
+      description: 'Not authenticated',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+    '403': {
+      description: 'Not authorized to delete this reaction',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+    '404': {
+      description: 'Reaction not found',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
+const deleteReactionHandler: RequestHandler<{ id: string; reactionId: string }> = async (req: AuthRequest, res) => {
+  try {
+    if (!req.user?.id) {
+      res.status(401).json({ error: 'Not authenticated' });
+      return;
+    }
+
+    await deleteMessageReaction(req.params.reactionId, req.user.id);
+    res.json({ message: 'Reaction deleted successfully' });
+  } catch (error) {
+    if (error instanceof Error) {
+      switch (error.message) {
+        case 'Reaction not found':
+          res.status(404).json({ error: error.message });
+          return;
+        case 'Not authorized to delete this reaction':
+          res.status(403).json({ error: error.message });
+          return;
+        case 'Message not found':
+          res.status(404).json({ error: error.message });
+          return;
+      }
+    }
+    console.error('Delete reaction error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
 router.post('/channel/:id', authenticate, createMessageHandler);
 router.get('/channel/:id', authenticate, listMessagesHandler);
 router.put('/:id', authenticate, updateMessageHandler);
 router.delete('/:id', authenticate, deleteMessageHandler);
 router.post('/:id/reaction', authenticate, addReactionHandler);
+router.delete('/:id/reaction/:reactionId', authenticate, deleteReactionHandler);
 
 export default router; 

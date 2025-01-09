@@ -54,7 +54,7 @@ class RedisService {
     }
 
     console.log('Setting up Redis subscriptions');
-    this.subscriber.subscribe('new_message', 'typing', 'presence', 'reaction', (err) => {
+    this.subscriber.subscribe('new_message', 'typing', 'presence', 'reaction', 'delete_reaction', (err) => {
       if (err) {
         console.error('Failed to subscribe to channels:', err);
         this.isSubscribed = false;
@@ -82,6 +82,10 @@ class RedisService {
           case 'reaction':
             console.log('Received reaction event on Redis channel:', message);
             this.handleReaction(JSON.parse(message));
+            break;
+          case 'delete_reaction':
+            console.log('Received delete reaction event on Redis channel:', message);
+            this.handleDeleteReaction(JSON.parse(message));
             break;
           default:
             console.log('Unhandled channel:', channel);
@@ -154,6 +158,21 @@ class RedisService {
     });
   }
 
+  private handleDeleteReaction(event: RedisDeleteReactionEvent) {
+    if (!this.wsHandler) {
+      console.error('WebSocket handler not initialized');
+      return;
+    }
+
+    console.log('Handling delete reaction event:', event);
+    this.wsHandler.broadcastToChannel(event.channelId, {
+      type: 'delete_reaction',
+      channelId: event.channelId,
+      messageId: event.messageId,
+      reactionId: event.reactionId,
+    });
+  }
+
   public async publishNewMessage(payload: RedisMessageEvent) {
     const result = await this.publisher.publish('new_message', JSON.stringify(payload));
     return result;
@@ -171,6 +190,13 @@ class RedisService {
 
   public async publishReaction(payload: RedisReactionEvent) {
     const result = await this.publisher.publish('reaction', JSON.stringify(payload));
+    return result;
+  }
+
+  public async publishDeletedReaction(payload: RedisDeleteReactionEvent) {
+    console.log('Publishing delete reaction event:', payload);
+    const result = await this.publisher.publish('delete_reaction', JSON.stringify(payload));
+    console.log('Publish result:', result);
     return result;
   }
 }
@@ -209,9 +235,16 @@ interface RedisReactionEvent {
   emoji: string;
 }
 
+interface RedisDeleteReactionEvent {
+  channelId: string;
+  messageId: string;
+  reactionId: string;
+}
+
 const redisService = new RedisService();
 export const initializeRedis = redisService.initialize.bind(redisService);
 export const publishNewMessage = redisService.publishNewMessage.bind(redisService);
 export const publishTyping = redisService.publishTyping.bind(redisService);
 export const publishPresence = redisService.publishPresence.bind(redisService);
 export const publishReaction = redisService.publishReaction.bind(redisService);
+export const publishDeletedReaction = redisService.publishDeletedReaction.bind(redisService);
