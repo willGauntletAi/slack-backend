@@ -84,6 +84,7 @@ export async function createDMChannel(workspaceId: string, userId: string, other
             join => join.onRef('last_messages.channel_id', '=', 'dmc.id')
         )
         .groupBy(['dmc.id', 'last_messages.last_message_at'])
+        .having(eb => eb.fn.count('dmm.user_id'), '=', userIds.length)
         .select((eb) => [
             jsonArrayFrom(eb
                 .selectFrom('users')

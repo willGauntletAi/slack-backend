@@ -118,7 +118,7 @@ const createDMChannelHandler: RequestHandler<{ workspaceId: string }, {}, Create
     }
 
     const channel = await createDMChannel(req.params.workspaceId, req.user.id, req.body.user_ids);
-    res.status(201).json(channel);
+    res.status(201).json({ ...channel, usernames: channel.usernames.map(u => u.username) });
   } catch (error) {
     console.error('Create DM channel error:', error);
     if (error instanceof Error) {
