@@ -14,12 +14,20 @@ import {
   UpdateChannelResponseSchema,
   SuccessMessageSchema,
   ErrorResponseSchema,
+  CreateChannelRequest,
+  UpdateChannelRequest,
+  CreateChannelResponse,
+  ListChannelsResponse,
+  ListUserChannelsResponse,
+  UpdateChannelResponse,
+  SuccessMessage,
+  ErrorResponse,
 } from './types';
 
 const router = Router();
 
-type CreateChannelBody = z.infer<typeof createChannelSchema>;
-type UpdateChannelBody = z.infer<typeof updateChannelSchema>;
+type CreateChannelBody = CreateChannelRequest;
+type UpdateChannelBody = UpdateChannelRequest;
 
 // POST /channel/workspace/:id - Create a channel in a workspace
 registry.registerPath({
@@ -90,7 +98,7 @@ registry.registerPath({
   },
 });
 
-const createChannelHandler: RequestHandler<{ id: string }, {}, CreateChannelBody> = async (req: AuthRequest, res) => {
+const createChannelHandler: RequestHandler<{ id: string }, CreateChannelResponse | ErrorResponse, CreateChannelBody> = async (req: AuthRequest, res) => {
   try {
     if (!req.user?.id) {
       res.status(401).json({ error: 'Not authenticated' });
@@ -99,10 +107,17 @@ const createChannelHandler: RequestHandler<{ id: string }, {}, CreateChannelBody
 
     const data = createChannelSchema.parse(req.body);
     const channel = await createChannel(req.params.id, req.user.id, data);
-    res.status(201).json(channel);
+    const response: CreateChannelResponse = {
+      id: channel.id,
+      name: channel.name,
+      is_private: channel.is_private,
+      created_at: channel.created_at.toISOString(),
+      updated_at: channel.updated_at.toISOString(),
+    };
+    res.status(201).json(response);
   } catch (error) {
     if (error instanceof z.ZodError) {
-      res.status(400).json({ error: error.errors });
+      res.status(400).json({ error: error.errors.map(e => e.message).join(', ') });
       return;
     }
     if (error instanceof Error && error.message === 'Not a member of the workspace') {
@@ -180,7 +195,7 @@ registry.registerPath({
   },
 });
 
-const listChannelsHandler: RequestHandler<{ id: string }> = async (req: AuthRequest, res) => {
+const listChannelsHandler: RequestHandler<{ id: string }, ListChannelsResponse | ErrorResponse> = async (req: AuthRequest, res) => {
   try {
     if (!req.user?.id) {
       res.status(401).json({ error: 'Not authenticated' });
@@ -196,10 +211,15 @@ const listChannelsHandler: RequestHandler<{ id: string }> = async (req: AuthRequ
     const excludeMine = excludeMineParam === 'true';
 
     const channels = await listChannelsInWorkspace(req.params.id, req.user.id, search, excludeMine);
-    res.json(channels.map(channel => ({
-      ...channel,
+    const response: ListChannelsResponse = channels.map(channel => ({
+      id: channel.id,
+      name: channel.name,
+      is_private: channel.is_private,
+      created_at: channel.created_at.toISOString(),
+      updated_at: channel.updated_at.toISOString(),
       usernames: channel.members.map(member => member.username),
-    })));
+    }));
+    res.json(response);
   } catch (error) {
     if (error instanceof Error && error.message === 'Not a member of the workspace') {
       res.status(403).json({ error: error.message });
@@ -210,22 +230,13 @@ const listChannelsHandler: RequestHandler<{ id: string }> = async (req: AuthRequ
   }
 };
 
-// GET /channel/me - List all channels the user is a member of
+// GET /channel/me - List channels for the current user
 registry.registerPath({
   method: 'get',
   path: '/channel/me',
   tags: ['channels'],
-  summary: 'List all channels the user is a member of',
+  summary: 'List channels for the current user',
   security: [{ bearerAuth: [] }],
-  parameters: [
-    {
-      name: 'workspace_id',
-      in: 'query',
-      required: false,
-      schema: { type: 'string' },
-      description: 'Optional workspace ID to filter channels',
-    },
-  ],
   responses: {
     '200': {
       description: 'List of channels retrieved successfully',
@@ -246,33 +257,34 @@ registry.registerPath({
   },
 });
 
-const listUserChannelsHandler: RequestHandler = async (req: AuthRequest, res) => {
+const listUserChannelsHandler: RequestHandler<{}, ListUserChannelsResponse | ErrorResponse> = async (req: AuthRequest, res) => {
   try {
     if (!req.user?.id) {
       res.status(401).json({ error: 'Not authenticated' });
       return;
     }
 
-    // Get workspace_id from query params if it exists
-    const workspaceId = typeof req.query.workspace_id === 'string' ? req.query.workspace_id : undefined;
-
-    const channels = await listUserChannels(req.user.id, workspaceId);
-    const result = channels.map(({ members, ...channel }) => ({
-      ...channel,
-      usernames: members.map(member =>
-        member.username,
-      ),
-    }))
-    res.json(result);
+    const channels = await listUserChannels(req.user.id);
+    const response: ListUserChannelsResponse = channels.map(channel => ({
+      id: channel.id,
+      name: channel.name,
+      is_private: channel.is_private,
+      created_at: channel.created_at.toISOString(),
+      updated_at: channel.updated_at.toISOString(),
+      workspace_id: channel.workspace_id,
+      workspace_name: channel.workspace_name,
+      usernames: channel.members.map(member => member.username),
+    }));
+    res.json(response);
   } catch (error) {
     console.error('List user channels error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 };
 
-// PUT /channel/:id - Update a channel
+// PATCH /channel/:id - Update a channel
 registry.registerPath({
-  method: 'put',
+  method: 'patch',
   path: '/channel/{id}',
   tags: ['channels'],
   summary: 'Update a channel',
@@ -321,7 +333,7 @@ registry.registerPath({
       },
     },
     '403': {
-      description: 'Not a member of the channel',
+      description: 'Not authorized to update the channel',
       content: {
         'application/json': {
           schema: ErrorResponseSchema,
@@ -339,7 +351,7 @@ registry.registerPath({
   },
 });
 
-const updateChannelHandler: RequestHandler<{ id: string }, {}, UpdateChannelBody> = async (req: AuthRequest, res) => {
+const updateChannelHandler: RequestHandler<{ id: string }, UpdateChannelResponse | ErrorResponse, UpdateChannelBody> = async (req: AuthRequest, res) => {
   try {
     if (!req.user?.id) {
       res.status(401).json({ error: 'Not authenticated' });
@@ -348,22 +360,35 @@ const updateChannelHandler: RequestHandler<{ id: string }, {}, UpdateChannelBody
 
     const data = updateChannelSchema.parse(req.body);
     const channel = await updateChannel(req.params.id, req.user.id, data);
-    res.json(channel);
+    const response: UpdateChannelResponse = {
+      id: channel.id,
+      name: channel.name,
+      is_private: channel.is_private,
+      created_at: channel.created_at.toISOString(),
+      updated_at: channel.updated_at.toISOString(),
+    };
+    res.json(response);
   } catch (error) {
     if (error instanceof z.ZodError) {
-      res.status(400).json({ error: error.errors });
+      res.status(400).json({ error: error.errors.map(e => e.message).join(', ') });
       return;
     }
-    if (error instanceof Error && error.message === 'Not a member of the channel') {
-      res.status(403).json({ error: error.message });
-      return;
+    if (error instanceof Error) {
+      if (error.message === 'Channel not found') {
+        res.status(404).json({ error: error.message });
+        return;
+      }
+      if (error.message === 'Not authorized to update the channel') {
+        res.status(403).json({ error: error.message });
+        return;
+      }
     }
     console.error('Update channel error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 };
 
-// POST /channel/:id/member/:userId - Add member to channel
+// POST /channel/:id/member/:userId - Add a member to a channel
 registry.registerPath({
   method: 'post',
   path: '/channel/{id}/member/{userId}',
@@ -404,7 +429,7 @@ registry.registerPath({
       },
     },
     '403': {
-      description: 'Not authorized to add members',
+      description: 'Not authorized to add members to the channel',
       content: {
         'application/json': {
           schema: ErrorResponseSchema,
@@ -422,43 +447,37 @@ registry.registerPath({
   },
 });
 
-const addChannelMemberHandler: RequestHandler<{ id: string; userId: string }> = async (req: AuthRequest, res) => {
+const addChannelMemberHandler: RequestHandler<{ id: string; userId: string }, SuccessMessage | ErrorResponse> = async (req: AuthRequest, res) => {
   try {
     if (!req.user?.id) {
       res.status(401).json({ error: 'Not authenticated' });
       return;
     }
 
-    const { id: channelId, userId } = req.params;
-
-    // Check if channel exists
-    const channel = await getChannelById(channelId);
+    const channel = await getChannelById(req.params.id);
     if (!channel) {
       res.status(404).json({ error: 'Channel not found' });
       return;
     }
 
-    // Check if user exists
-    const user = await findUserById(userId);
+    const user = await findUserById(req.params.userId);
     if (!user) {
       res.status(404).json({ error: 'User not found' });
       return;
     }
 
-    await addChannelMember(channelId, userId, req.user.id);
-    res.json({ message: 'Member added successfully' });
+    await addChannelMember(req.params.id, req.params.userId, req.user.id);
+    const response: SuccessMessage = { message: 'Member added successfully' };
+    res.json(response);
   } catch (error) {
     if (error instanceof Error) {
-      switch (error.message) {
-        case 'Not authorized to add members':
-          res.status(403).json({ error: error.message });
-          return;
-        case 'User is already a member of this channel':
-          res.status(400).json({ error: error.message });
-          return;
-        case 'Both users must be members of the workspace for private channels':
-          res.status(403).json({ error: error.message });
-          return;
+      if (error.message === 'Not authorized to add members to the channel') {
+        res.status(403).json({ error: error.message });
+        return;
+      }
+      if (error.message === 'User is already a member of the channel') {
+        res.status(400).json({ error: error.message });
+        return;
       }
     }
     console.error('Add channel member error:', error);
@@ -466,7 +485,7 @@ const addChannelMemberHandler: RequestHandler<{ id: string; userId: string }> = 
   }
 };
 
-// DELETE /channel/:id/member/:userId - Remove member from channel
+// DELETE /channel/:id/member/:userId - Remove a member from a channel
 registry.registerPath({
   method: 'delete',
   path: '/channel/{id}/member/{userId}',
@@ -507,7 +526,7 @@ registry.registerPath({
       },
     },
     '403': {
-      description: 'Not authorized to remove members',
+      description: 'Not authorized to remove members from the channel',
       content: {
         'application/json': {
           schema: ErrorResponseSchema,
@@ -525,40 +544,37 @@ registry.registerPath({
   },
 });
 
-const removeChannelMemberHandler: RequestHandler<{ id: string; userId: string }> = async (req: AuthRequest, res) => {
+const removeChannelMemberHandler: RequestHandler<{ id: string; userId: string }, SuccessMessage | ErrorResponse> = async (req: AuthRequest, res) => {
   try {
     if (!req.user?.id) {
       res.status(401).json({ error: 'Not authenticated' });
       return;
     }
 
-    const { id: channelId, userId } = req.params;
-
-    // Check if channel exists
-    const channel = await getChannelById(channelId);
+    const channel = await getChannelById(req.params.id);
     if (!channel) {
       res.status(404).json({ error: 'Channel not found' });
       return;
     }
 
-    // Check if user exists
-    const user = await findUserById(userId);
+    const user = await findUserById(req.params.userId);
     if (!user) {
       res.status(404).json({ error: 'User not found' });
       return;
     }
 
-    await removeChannelMember(channelId, userId, req.user.id);
-    res.json({ message: 'Member removed successfully' });
+    await removeChannelMember(req.params.id, req.params.userId, req.user.id);
+    const response: SuccessMessage = { message: 'Member removed successfully' };
+    res.json(response);
   } catch (error) {
     if (error instanceof Error) {
-      switch (error.message) {
-        case 'Not authorized to remove members':
-          res.status(403).json({ error: error.message });
-          return;
-        case 'User is not a member of this channel':
-          res.status(400).json({ error: error.message });
-          return;
+      if (error.message === 'Not authorized to remove members from the channel') {
+        res.status(403).json({ error: error.message });
+        return;
+      }
+      if (error.message === 'User is not a member of the channel') {
+        res.status(400).json({ error: error.message });
+        return;
       }
     }
     console.error('Remove channel member error:', error);
@@ -569,7 +585,7 @@ const removeChannelMemberHandler: RequestHandler<{ id: string; userId: string }>
 router.get('/me', authenticate, listUserChannelsHandler);
 router.post('/workspace/:id', authenticate, createChannelHandler);
 router.get('/workspace/:id', authenticate, listChannelsHandler);
-router.put('/:id', authenticate, updateChannelHandler);
+router.patch('/:id', authenticate, updateChannelHandler);
 router.post('/:id/member/:userId', authenticate, addChannelMemberHandler);
 router.delete('/:id/member/:userId', authenticate, removeChannelMemberHandler);
 

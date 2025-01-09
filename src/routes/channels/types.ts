@@ -15,7 +15,7 @@ export const updateChannelSchema = z.object({
 // Response schemas
 export const ChannelSchema = z.object({
     id: z.string(),
-    name: z.string(),
+    name: z.string().nullable(),
     is_private: z.boolean(),
     created_at: z.string(),
     updated_at: z.string(),
@@ -31,7 +31,7 @@ export const UserSchema = z.object({
 
 export const ListChannelSchema = z.object({
     id: z.string(),
-    name: z.string(),
+    name: z.string().nullable(),
     is_private: z.boolean(),
     created_at: z.string(),
     updated_at: z.string(),
@@ -61,4 +61,20 @@ export const ErrorResponseSchema = z.object({
 export const CreateChannelResponseSchema = ChannelSchema;
 export const ListChannelsResponseSchema = z.array(ListChannelSchema);
 export const ListUserChannelsResponseSchema = z.array(UserChannelSchema);
-export const UpdateChannelResponseSchema = ChannelSchema; 
+export const UpdateChannelResponseSchema = ChannelSchema;
+
+// Export inferred types
+export type CreateChannelRequest = z.infer<typeof createChannelSchema>;
+export type UpdateChannelRequest = z.infer<typeof updateChannelSchema>;
+export type Channel = z.infer<typeof ChannelSchema>;
+export type User = z.infer<typeof UserSchema>;
+export type ListChannel = z.infer<typeof ListChannelSchema>;
+export type UserChannel = z.infer<typeof UserChannelSchema>;
+export type SuccessMessage = z.infer<typeof SuccessMessageSchema>;
+export type ErrorResponse = z.infer<typeof ErrorResponseSchema>;
+
+// Response types
+export type CreateChannelResponse = z.infer<typeof CreateChannelResponseSchema>;
+export type ListChannelsResponse = z.infer<typeof ListChannelsResponseSchema>;
+export type ListUserChannelsResponse = z.infer<typeof ListUserChannelsResponseSchema>;
+export type UpdateChannelResponse = z.infer<typeof UpdateChannelResponseSchema>; 

@@ -59,4 +59,21 @@ export const LoginResponseSchema = z.object({
 
 export const RefreshResponseSchema = TokensSchema;
 export const LogoutResponseSchema = SuccessMessageSchema;
-export const LogoutAllResponseSchema = SuccessMessageSchema; 
+export const LogoutAllResponseSchema = SuccessMessageSchema;
+
+// Export inferred types
+export type RegisterRequest = z.infer<typeof registerSchema>;
+export type LoginRequest = z.infer<typeof loginSchema>;
+export type RefreshRequest = z.infer<typeof refreshSchema>;
+export type User = z.infer<typeof UserSchema>;
+export type UserBasic = z.infer<typeof UserBasicSchema>;
+export type Tokens = z.infer<typeof TokensSchema>;
+export type SuccessMessage = z.infer<typeof SuccessMessageSchema>;
+export type ErrorResponse = z.infer<typeof ErrorResponseSchema>;
+
+// Response types
+export type RegisterResponse = z.infer<typeof RegisterResponseSchema>;
+export type LoginResponse = z.infer<typeof LoginResponseSchema>;
+export type RefreshResponse = z.infer<typeof RefreshResponseSchema>;
+export type LogoutResponse = z.infer<typeof LogoutResponseSchema>;
+export type LogoutAllResponse = z.infer<typeof LogoutAllResponseSchema>; 

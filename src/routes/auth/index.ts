@@ -18,13 +18,22 @@ import {
   LogoutResponseSchema,
   LogoutAllResponseSchema,
   ErrorResponseSchema,
+  RegisterRequest,
+  LoginRequest,
+  RefreshRequest,
+  RegisterResponse,
+  LoginResponse,
+  RefreshResponse,
+  LogoutResponse,
+  LogoutAllResponse,
+  ErrorResponse,
 } from './types';
 
 const router = Router();
 
-type RegisterBody = z.infer<typeof registerSchema>;
-type LoginBody = z.infer<typeof loginSchema>;
-type RefreshBody = z.infer<typeof refreshSchema>;
+type RegisterBody = RegisterRequest;
+type LoginBody = LoginRequest;
+type RefreshBody = RefreshRequest;
 
 function generateTokens(userId: string) {
   const accessToken = jwt.sign({ userId }, jwtConfig.JWT_SECRET, {
@@ -78,7 +87,8 @@ registry.registerPath({
     },
   },
 });
-const registerHandler: RequestHandler<{}, {}, RegisterBody> = async (req, res): Promise<void> => {
+
+const registerHandler: RequestHandler<{}, RegisterResponse | ErrorResponse, RegisterBody> = async (req, res): Promise<void> => {
   try {
     const { username, email, password } = registerSchema.parse(req.body);
 
@@ -118,13 +128,21 @@ const registerHandler: RequestHandler<{}, {}, RegisterBody> = async (req, res): 
       expires_at: getExpirationDate(),
     });
 
-    res.status(201).json({
-      user,
-      ...tokens,
-    });
+    const response: RegisterResponse = {
+      user: {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        created_at: user.created_at.toISOString(),
+        updated_at: user.updated_at.toISOString(),
+      },
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+    };
+    res.status(201).json(response);
   } catch (error) {
     if (error instanceof z.ZodError) {
-      res.status(400).json({ error: error.errors });
+      res.status(400).json({ error: error.errors.map(e => e.message).join(', ') });
       return;
     }
     console.error('Registration error:', error);
@@ -174,7 +192,8 @@ registry.registerPath({
     },
   },
 });
-const loginHandler: RequestHandler<{}, {}, LoginBody> = async (req, res): Promise<void> => {
+
+const loginHandler: RequestHandler<{}, LoginResponse | ErrorResponse, LoginBody> = async (req, res): Promise<void> => {
   try {
     const { email, password } = loginSchema.parse(req.body);
 
@@ -202,15 +221,19 @@ const loginHandler: RequestHandler<{}, {}, LoginBody> = async (req, res): Promis
       expires_at: getExpirationDate(),
     });
 
-    // Don't send password hash in response
-    const { password_hash, ...userWithoutPassword } = user;
-    res.json({
-      user: userWithoutPassword,
-      ...tokens,
-    });
+    const response: LoginResponse = {
+      user: {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+      },
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+    };
+    res.json(response);
   } catch (error) {
     if (error instanceof z.ZodError) {
-      res.status(400).json({ error: error.errors });
+      res.status(400).json({ error: error.errors.map(e => e.message).join(', ') });
       return;
     }
     console.error('Login error:', error);
@@ -260,7 +283,8 @@ registry.registerPath({
     },
   },
 });
-const refreshHandler: RequestHandler<{}, {}, RefreshBody> = async (req, res): Promise<void> => {
+
+const refreshHandler: RequestHandler<{}, RefreshResponse | ErrorResponse, RefreshBody> = async (req, res): Promise<void> => {
   try {
     const { refreshToken } = refreshSchema.parse(req.body);
 
@@ -287,10 +311,14 @@ const refreshHandler: RequestHandler<{}, {}, RefreshBody> = async (req, res): Pr
       expires_at: getExpirationDate(),
     });
 
-    res.json(tokens);
+    const response: RefreshResponse = {
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+    };
+    res.json(response);
   } catch (error) {
     if (error instanceof z.ZodError) {
-      res.status(400).json({ error: error.errors });
+      res.status(400).json({ error: error.errors.map(e => e.message).join(', ') });
       return;
     }
     if (error instanceof jwt.JsonWebTokenError) {
@@ -336,14 +364,16 @@ registry.registerPath({
     },
   },
 });
-const logoutHandler: RequestHandler = async (req: AuthRequest, res): Promise<void> => {
+
+const logoutHandler: RequestHandler<{}, LogoutResponse | ErrorResponse> = async (req: AuthRequest, res): Promise<void> => {
   try {
     const authHeader = req.headers.authorization;
     if (authHeader?.startsWith('Bearer ')) {
       const refreshToken = authHeader.split(' ')[1];
       await revokeRefreshToken(refreshToken);
     }
-    res.json({ message: 'Logged out successfully' });
+    const response: LogoutResponse = { message: 'Logged out successfully' };
+    res.json(response);
   } catch (error) {
     console.error('Logout error:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -384,14 +414,16 @@ registry.registerPath({
     },
   },
 });
-const logoutAllHandler: RequestHandler = async (req: AuthRequest, res): Promise<void> => {
+
+const logoutAllHandler: RequestHandler<{}, LogoutAllResponse | ErrorResponse> = async (req: AuthRequest, res): Promise<void> => {
   try {
     if (!req.user?.id) {
       res.status(401).json({ error: 'Not authenticated' });
       return;
     }
     await revokeAllUserRefreshTokens(req.user.id);
-    res.json({ message: 'Logged out from all devices' });
+    const response: LogoutAllResponse = { message: 'Logged out from all devices' };
+    res.json(response);
   } catch (error) {
     console.error('Logout all error:', error);
     res.status(500).json({ error: 'Internal server error' });

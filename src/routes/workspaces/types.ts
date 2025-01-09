@@ -49,4 +49,20 @@ export const AcceptInviteResponseSchema = z.object({
     message: z.string(),
     membership: WorkspaceMembershipSchema,
 });
-export const RemoveWorkspaceMemberResponseSchema = SuccessMessageSchema; 
+export const RemoveWorkspaceMemberResponseSchema = SuccessMessageSchema;
+
+// Export inferred types
+export type CreateWorkspaceRequest = z.infer<typeof createWorkspaceSchema>;
+export type InviteUserRequest = z.infer<typeof inviteUserSchema>;
+export type Workspace = z.infer<typeof WorkspaceSchema>;
+export type WorkspaceWithRole = z.infer<typeof WorkspaceWithRoleSchema>;
+export type WorkspaceMembership = z.infer<typeof WorkspaceMembershipSchema>;
+export type SuccessMessage = z.infer<typeof SuccessMessageSchema>;
+export type ErrorResponse = z.infer<typeof ErrorResponseSchema>;
+
+// Response types
+export type CreateWorkspaceResponse = z.infer<typeof CreateWorkspaceResponseSchema>;
+export type ListWorkspacesResponse = z.infer<typeof ListWorkspacesResponseSchema>;
+export type InviteUserResponse = z.infer<typeof InviteUserResponseSchema>;
+export type AcceptInviteResponse = z.infer<typeof AcceptInviteResponseSchema>;
+export type RemoveWorkspaceMemberResponse = z.infer<typeof RemoveWorkspaceMemberResponseSchema>; 

@@ -14,12 +14,20 @@ import {
   AcceptInviteResponseSchema,
   RemoveWorkspaceMemberResponseSchema,
   ErrorResponseSchema,
+  CreateWorkspaceRequest,
+  InviteUserRequest,
+  CreateWorkspaceResponse,
+  ListWorkspacesResponse,
+  InviteUserResponse,
+  AcceptInviteResponse,
+  RemoveWorkspaceMemberResponse,
+  ErrorResponse,
 } from './types';
 
 const router = Router();
 
-type CreateWorkspaceBody = z.infer<typeof createWorkspaceSchema>;
-type InviteUserBody = z.infer<typeof inviteUserSchema>;
+type CreateWorkspaceBody = CreateWorkspaceRequest;
+type InviteUserBody = InviteUserRequest;
 
 // POST /workspace - Create a new workspace
 registry.registerPath({
@@ -65,7 +73,7 @@ registry.registerPath({
   },
 });
 
-const createWorkspaceHandler: RequestHandler<{}, {}, CreateWorkspaceBody> = async (req: AuthRequest, res) => {
+const createWorkspaceHandler: RequestHandler<{}, CreateWorkspaceResponse | ErrorResponse, CreateWorkspaceBody> = async (req: AuthRequest, res) => {
   try {
     if (!req.user?.id) {
       res.status(401).json({ error: 'Not authenticated' });
@@ -74,10 +82,16 @@ const createWorkspaceHandler: RequestHandler<{}, {}, CreateWorkspaceBody> = asyn
 
     const data = createWorkspaceSchema.parse(req.body);
     const workspace = await createWorkspace(req.user.id, data);
-    res.status(201).json(workspace);
+    const response: CreateWorkspaceResponse = {
+      id: workspace.id,
+      name: workspace.name,
+      created_at: workspace.created_at.toISOString(),
+      updated_at: workspace.updated_at.toISOString(),
+    };
+    res.status(201).json(response);
   } catch (error) {
     if (error instanceof z.ZodError) {
-      res.status(400).json({ error: error.errors });
+      res.status(400).json({ error: error.errors.map(e => e.message).join(', ') });
       return;
     }
     console.error('Create workspace error:', error);
@@ -112,7 +126,7 @@ registry.registerPath({
   },
 });
 
-const listWorkspacesHandler: RequestHandler = async (req: AuthRequest, res) => {
+const listWorkspacesHandler: RequestHandler<{}, ListWorkspacesResponse | ErrorResponse> = async (req: AuthRequest, res) => {
   try {
     if (!req.user?.id) {
       res.status(401).json({ error: 'Not authenticated' });
@@ -120,7 +134,14 @@ const listWorkspacesHandler: RequestHandler = async (req: AuthRequest, res) => {
     }
 
     const workspaces = await listWorkspacesForUser(req.user.id);
-    res.json(workspaces);
+    const response: ListWorkspacesResponse = workspaces.map(workspace => ({
+      id: workspace.id,
+      name: workspace.name,
+      created_at: workspace.created_at.toISOString(),
+      updated_at: workspace.updated_at.toISOString(),
+      role: workspace.role,
+    }));
+    res.json(response);
   } catch (error) {
     console.error('List workspaces error:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -196,7 +217,7 @@ registry.registerPath({
   },
 });
 
-const inviteUserHandler: RequestHandler<{ id: string }, {}, InviteUserBody> = async (req: AuthRequest, res) => {
+const inviteUserHandler: RequestHandler<{ id: string }, InviteUserResponse | ErrorResponse, InviteUserBody> = async (req: AuthRequest, res) => {
   try {
     if (!req.user?.id) {
       res.status(401).json({ error: 'Not authenticated' });
@@ -205,23 +226,25 @@ const inviteUserHandler: RequestHandler<{ id: string }, {}, InviteUserBody> = as
 
     const { email } = inviteUserSchema.parse(req.body);
     await inviteUserByEmail(req.params.id, email, req.user.id);
-    res.json({ message: 'User invited successfully' });
+    const response: InviteUserResponse = { message: 'User invited successfully' };
+    res.json(response);
   } catch (error) {
     if (error instanceof z.ZodError) {
-      res.status(400).json({ error: error.errors });
+      res.status(400).json({ error: error.errors.map(e => e.message).join(', ') });
       return;
     }
     if (error instanceof Error) {
-      switch (error.message) {
-        case 'Not authorized to invite members':
-          res.status(403).json({ error: error.message });
-          return;
-        case 'User not found':
-          res.status(404).json({ error: error.message });
-          return;
-        case 'User is already a member of this workspace':
-          res.status(400).json({ error: error.message });
-          return;
+      if (error.message === 'Not authorized to invite members') {
+        res.status(403).json({ error: error.message });
+        return;
+      }
+      if (error.message === 'User not found') {
+        res.status(404).json({ error: error.message });
+        return;
+      }
+      if (error.message === 'User is already a member of this workspace') {
+        res.status(400).json({ error: error.message });
+        return;
       }
     }
     console.error('Invite user error:', error);
@@ -281,7 +304,7 @@ registry.registerPath({
   },
 });
 
-const acceptInviteHandler: RequestHandler<{ id: string }> = async (req: AuthRequest, res) => {
+const acceptInviteHandler: RequestHandler<{ id: string }, AcceptInviteResponse | ErrorResponse> = async (req: AuthRequest, res) => {
   try {
     if (!req.user?.id) {
       res.status(401).json({ error: 'Not authenticated' });
@@ -298,19 +321,31 @@ const acceptInviteHandler: RequestHandler<{ id: string }> = async (req: AuthRequ
     }
 
     const membership = await acceptWorkspaceInvite(workspaceId, req.user.id);
-    res.json({
+    if (!membership) {
+      res.status(404).json({ error: 'No invitation found' });
+      return;
+    }
+
+    const response: AcceptInviteResponse = {
       message: 'Invitation accepted successfully',
-      membership,
-    });
+      membership: {
+        workspace_id: membership.workspace_id,
+        user_id: membership.user_id,
+        role: membership.role,
+        joined_at: membership.joined_at.toISOString(),
+        updated_at: membership.updated_at.toISOString(),
+      },
+    };
+    res.json(response);
   } catch (error) {
     if (error instanceof Error) {
-      switch (error.message) {
-        case 'No invitation found':
-          res.status(404).json({ error: error.message });
-          return;
-        case 'User is already a member of this workspace':
-          res.status(400).json({ error: error.message });
-          return;
+      if (error.message === 'No invitation found') {
+        res.status(404).json({ error: error.message });
+        return;
+      }
+      if (error.message === 'User is already a member of this workspace') {
+        res.status(400).json({ error: error.message });
+        return;
       }
     }
     console.error('Accept invitation error:', error);
@@ -377,7 +412,7 @@ registry.registerPath({
   },
 });
 
-const removeWorkspaceMemberHandler: RequestHandler<{ id: string; userId: string }> = async (req: AuthRequest, res) => {
+const removeWorkspaceMemberHandler: RequestHandler<{ id: string; userId: string }, RemoveWorkspaceMemberResponse | ErrorResponse> = async (req: AuthRequest, res) => {
   try {
     if (!req.user?.id) {
       res.status(401).json({ error: 'Not authenticated' });
@@ -401,19 +436,21 @@ const removeWorkspaceMemberHandler: RequestHandler<{ id: string; userId: string 
     }
 
     await removeWorkspaceMember(workspaceId, userId, req.user.id);
-    res.json({ message: 'Member removed successfully' });
+    const response: RemoveWorkspaceMemberResponse = { message: 'Member removed successfully' };
+    res.json(response);
   } catch (error) {
     if (error instanceof Error) {
-      switch (error.message) {
-        case 'Not authorized to remove members':
-          res.status(403).json({ error: error.message });
-          return;
-        case 'User is not a member of this workspace':
-          res.status(404).json({ error: error.message });
-          return;
-        case 'Cannot remove the last admin from the workspace':
-          res.status(403).json({ error: error.message });
-          return;
+      if (error.message === 'Not authorized to remove members') {
+        res.status(403).json({ error: error.message });
+        return;
+      }
+      if (error.message === 'User is not a member of this workspace') {
+        res.status(404).json({ error: error.message });
+        return;
+      }
+      if (error.message === 'Cannot remove the last admin from the workspace') {
+        res.status(403).json({ error: error.message });
+        return;
       }
     }
     console.error('Remove workspace member error:', error);
