@@ -57,7 +57,7 @@ class RedisService {
     }
 
     console.log('Setting up Redis subscriptions');
-    this.subscriber.subscribe('new_message', 'typing', 'presence', (err) => {
+    this.subscriber.subscribe('new_message', 'new_direct_message', 'typing', 'presence', (err) => {
       if (err) {
         console.error('Failed to subscribe to channels:', err);
         this.isSubscribed = false;

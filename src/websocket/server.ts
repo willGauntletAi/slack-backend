@@ -162,6 +162,7 @@ export class WebSocketHandler {
 
   public async broadcastToDm(channelId: string, message: ServerMessage) {
     const connections = await getConnectionsForDM(channelId, this.serverId);
+    console.log('Connections for DM:', connections);
     for (const connection of connections) {
       const ws = this.connections.get(connection.connection_id);
       if (ws) {

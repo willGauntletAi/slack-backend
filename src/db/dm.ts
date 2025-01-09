@@ -1,6 +1,6 @@
 import { db } from './index';
 import { z } from 'zod';
-import { publishNewMessage } from '../services/redis';
+import { publishNewDirectMessage, publishNewMessage } from '../services/redis';
 import { checkUsersShareWorkspace } from './users';
 import { sql } from 'kysely';
 import { jsonArrayFrom } from "kysely/helpers/postgres";
@@ -185,7 +185,7 @@ export async function createDMMessage(channelId: string, userId: string, data: C
     });
 
     // Publish the new message event
-    await publishNewMessage({
+    await publishNewDirectMessage({
         channelId,
         message: {
             id: result.id.toString(),
