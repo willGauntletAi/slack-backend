@@ -26,36 +26,9 @@ export interface Channels {
   deleted_at: Timestamp | null;
   id: Generated<string>;
   is_private: Generated<boolean>;
-  name: string;
+  name: string | null;
   updated_at: Generated<Timestamp>;
   workspace_id: string;
-}
-
-export interface DirectMessageChannels {
-  created_at: Generated<Timestamp>;
-  deleted_at: Timestamp | null;
-  id: Generated<string>;
-  updated_at: Generated<Timestamp>;
-  workspace_id: string;
-}
-
-export interface DirectMessageMembers {
-  channel_id: string;
-  deleted_at: Timestamp | null;
-  joined_at: Generated<Timestamp>;
-  updated_at: Generated<Timestamp>;
-  user_id: string;
-}
-
-export interface DirectMessages {
-  channel_id: string;
-  content: string;
-  created_at: Generated<Timestamp>;
-  deleted_at: Timestamp | null;
-  id: Generated<Int8>;
-  parent_id: Int8 | null;
-  updated_at: Generated<Timestamp>;
-  user_id: string;
 }
 
 export interface MessageReactions {
@@ -123,9 +96,6 @@ export interface Workspaces {
 export interface DB {
   channel_members: ChannelMembers;
   channels: Channels;
-  direct_message_channels: DirectMessageChannels;
-  direct_message_members: DirectMessageMembers;
-  direct_messages: DirectMessages;
   message_reactions: MessageReactions;
   messages: Messages;
   refresh_tokens: RefreshTokens;

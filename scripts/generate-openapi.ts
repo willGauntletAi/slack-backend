@@ -13,7 +13,6 @@ import '../src/routes/users';
 import '../src/routes/workspaces';
 import '../src/routes/channels';
 import '../src/routes/messages';
-import '../src/routes/dm';
 
 import { generateOpenApiDocument } from '../src/utils/openapi';
 
@@ -30,7 +29,7 @@ writeFileSync(outputPath, openApiJson);
 // Also save WebSocket types
 import { clientMessageSchema, serverMessageSchema } from '../src/websocket/types';
 
-console.log(`OpenAPI document saved to ${outputPath}`); 
+console.log(`OpenAPI document saved to ${outputPath}`);
 
 const wsTypes = {
   clientMessages: clientMessageSchema,

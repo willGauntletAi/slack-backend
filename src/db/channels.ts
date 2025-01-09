@@ -2,41 +2,46 @@ import { db } from './index';
 import { z } from 'zod';
 import { isWorkspaceMember } from './workspaces';
 import { sql } from 'kysely';
+import { jsonArrayFrom } from 'kysely/helpers/postgres';
 
 // Schema for creating a channel
 export const createChannelSchema = z.object({
-  name: z.string().min(1).max(100),
+  name: z.string().min(1).max(100).nullable(),
   is_private: z.boolean().default(false),
+  member_ids: z.array(z.string()).min(1),
 });
 
 export type CreateChannelData = z.infer<typeof createChannelSchema>;
 
 // Schema for updating a channel
 export const updateChannelSchema = z.object({
-  name: z.string().min(1).max(100).optional(),
+  name: z.string().min(1).max(100).nullable().optional(),
   is_private: z.boolean().optional(),
 });
 
 export type UpdateChannelData = z.infer<typeof updateChannelSchema>;
 
-// Create a new channel and add the creator as a member
+// Create a new channel and add the creator and specified members
 export async function createChannel(workspaceId: string, userId: string, data: CreateChannelData) {
-  // Check if user is a member of the workspace
-  const isMember = await isWorkspaceMember(workspaceId, userId);
-  if (!isMember) {
-    throw new Error('Not a member of the workspace');
+  // Verify all members are in the workspace
+  const memberIds = [...new Set([userId, ...data.member_ids])];
+  for (const memberId of memberIds) {
+    const isMemberInWorkspace = await isWorkspaceMember(workspaceId, memberId);
+    if (!isMemberInWorkspace) {
+      throw new Error(`User ${memberId} is not a member of the workspace`);
+    }
   }
 
   const now = new Date().toISOString();
 
-  // Use a transaction to create the channel and add the creator as a member
+  // Use a transaction to create the channel and add all members
   return await db.transaction().execute(async (trx) => {
     // Create the channel
     const channel = await trx
       .insertInto('channels')
       .values({
         workspace_id: workspaceId,
-        name: data.name,
+        name: data.name ?? sql`NULL`,
         is_private: data.is_private,
         created_at: now,
         updated_at: now,
@@ -44,23 +49,35 @@ export async function createChannel(workspaceId: string, userId: string, data: C
       .returningAll()
       .executeTakeFirstOrThrow();
 
-    // Add the creator as a member
+    // Add all specified members
     await trx
       .insertInto('channel_members')
-      .values({
-        channel_id: channel.id,
-        user_id: userId,
-        joined_at: now,
-      })
+      .values(
+        memberIds.map(memberId => ({
+          channel_id: channel.id,
+          user_id: memberId,
+          joined_at: now,
+        }))
+      )
       .execute();
 
-    return channel;
+    // Get member usernames
+    const members = await trx
+      .selectFrom('users')
+      .select(['username'])
+      .where('id', 'in', memberIds)
+      .execute();
+
+    return {
+      ...channel,
+      usernames: members.map(m => m.username),
+    };
   });
 }
 
 // List channels in a workspace
 export async function listChannelsInWorkspace(
-  workspaceId: string, 
+  workspaceId: string,
   userId: string,
   search?: string,
   excludeMine?: boolean
@@ -88,8 +105,7 @@ export async function listChannelsInWorkspace(
           eb('cm.deleted_at', 'is', null)
         ])
       ])
-    )
-    .limit(50);
+    );
 
   // Add case-insensitive search if search parameter is provided
   if (search) {
@@ -107,12 +123,24 @@ export async function listChannelsInWorkspace(
   }
 
   return await query
-    .select([
+    .select((eb) => [
       'c.id',
       'c.name',
       'c.is_private',
       'c.created_at',
       'c.updated_at',
+      jsonArrayFrom(
+        eb.selectFrom('users')
+          .select([
+            'username',
+          ])
+          .innerJoin('channel_members', join =>
+            join
+              .onRef('channel_members.user_id', '=', 'users.id')
+              .onRef('channel_members.channel_id', '=', 'c.id')
+          )
+          .where('channel_members.deleted_at', 'is', null)
+      ).as('members')
     ])
     .execute();
 }
@@ -154,6 +182,7 @@ export async function updateChannel(channelId: string, userId: string, data: Upd
     .updateTable('channels')
     .set({
       ...data,
+      name: data.name ?? sql`NULL`,
       updated_at: now,
     })
     .where('id', '=', channelId)
@@ -273,7 +302,7 @@ export async function listUserChannels(userId: string, workspaceId?: string) {
   }
 
   return await query
-    .select([
+    .select(eb => [
       'c.id',
       'c.name',
       'c.is_private',
@@ -281,6 +310,21 @@ export async function listUserChannels(userId: string, workspaceId?: string) {
       'c.updated_at',
       'c.workspace_id',
       'w.name as workspace_name',
+      jsonArrayFrom(
+        eb.selectFrom('users')
+          .select([
+            'id',
+            'username',
+            'email',
+            'created_at',
+          ])
+          .innerJoin('channel_members', join =>
+            join
+              .onRef('channel_members.user_id', '=', 'users.id')
+              .onRef('channel_members.channel_id', '=', eb.ref('c.id'))
+          )
+          .where('channel_members.deleted_at', 'is', null)
+      ).as('members')
     ])
     .execute();
 } 

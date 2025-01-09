@@ -9,7 +9,6 @@ import usersRouter from "./routes/users";
 import workspacesRouter from "./routes/workspaces";
 import channelsRouter from "./routes/channels";
 import messagesRouter from "./routes/messages";
-import dmRouter from "./routes/dm";
 import { extendZodWithOpenApi } from '@asteasolutions/zod-to-openapi';
 import { z } from 'zod';
 import swaggerUi from 'swagger-ui-express';
@@ -39,7 +38,6 @@ app.use('/user', usersRouter);
 app.use('/workspace', workspacesRouter);
 app.use('/channel', channelsRouter);
 app.use('/message', messagesRouter);
-app.use('/dm', dmRouter);
 
 const port = process.env.PORT || 3000;
 server.listen(port, () => {

@@ -57,7 +57,7 @@ class RedisService {
     }
 
     console.log('Setting up Redis subscriptions');
-    this.subscriber.subscribe('new_message', 'new_direct_message', 'typing', 'presence', (err) => {
+    this.subscriber.subscribe('new_message', 'typing', 'presence', (err) => {
       if (err) {
         console.error('Failed to subscribe to channels:', err);
         this.isSubscribed = false;
@@ -79,9 +79,6 @@ class RedisService {
           case 'typing':
             this.handleTyping(JSON.parse(message));
             break;
-          case 'new_direct_message':
-            this.handleNewDirectMessage(JSON.parse(message));
-            break;
           case 'presence':
             this.handlePresence(JSON.parse(message));
             break;
@@ -91,20 +88,6 @@ class RedisService {
       } catch (error) {
         console.error('Error handling message:', error);
       }
-    });
-  }
-
-  private handleNewDirectMessage(event: RedisDirectMessageEvent) {
-    if (!this.wsHandler) {
-      console.error('WebSocket handler not initialized');
-      return;
-    }
-
-    console.log('Handling new message:', event);
-    this.wsHandler.broadcastToDm(event.channelId, {
-      type: 'new_direct_message',
-      channelId: event.channelId,
-      message: event.message,
     });
   }
 
@@ -129,21 +112,12 @@ class RedisService {
     }
 
     console.log('Handling typing event:', event);
-    if (event.isDm) {
-      this.wsHandler.broadcastToDm(event.channelId, {
-        type: 'typing',
-        channelId: event.channelId,
-        userId: event.userId,
-        username: event.username,
-      });
-    } else {
-      this.wsHandler.broadcastToChannel(event.channelId, {
-        type: 'typing',
-        channelId: event.channelId,
-        userId: event.userId,
-        username: event.username,
-      });
-    }
+    this.wsHandler.broadcastToChannel(event.channelId, {
+      type: 'typing',
+      channelId: event.channelId,
+      userId: event.userId,
+      username: event.username,
+    });
   }
 
   private handlePresence(event: RedisPresenceEvent) {
@@ -168,13 +142,6 @@ class RedisService {
     return result;
   }
 
-  public async publishNewDirectMessage(payload: RedisDirectMessageEvent) {
-    console.log('Publishing new message:', payload);
-    const result = await this.publisher.publish('new_direct_message', JSON.stringify(payload));
-    console.log('Publish result:', result);
-    return result;
-  }
-
   public async publishTyping(payload: RedisTypingEvent) {
     console.log('Publishing typing event:', payload);
     const result = await this.publisher.publish('typing', JSON.stringify(payload));
@@ -190,18 +157,6 @@ class RedisService {
   }
 }
 
-interface RedisDirectMessageEvent {
-  channelId: string;
-  message: {
-    id: string;
-    content: string;
-    parent_id: string | null;
-    created_at: string;
-    updated_at: string;
-    user_id: string;
-    username: string;
-  };
-}
 interface RedisMessageEvent {
   channelId: string;
   message: {
@@ -219,7 +174,6 @@ interface RedisTypingEvent {
   channelId: string;
   userId: string;
   username: string;
-  isDm: boolean;
 }
 
 interface RedisPresenceEvent {
@@ -231,6 +185,5 @@ interface RedisPresenceEvent {
 const redisService = new RedisService();
 export const initializeRedis = redisService.initialize.bind(redisService);
 export const publishNewMessage = redisService.publishNewMessage.bind(redisService);
-export const publishNewDirectMessage = redisService.publishNewDirectMessage.bind(redisService);
 export const publishTyping = redisService.publishTyping.bind(redisService);
 export const publishPresence = redisService.publishPresence.bind(redisService);

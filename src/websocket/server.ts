@@ -2,7 +2,7 @@ import { WebSocket, WebSocketServer } from 'ws';
 import { Server } from 'http';
 import { verifyToken } from '../utils/jwt';
 import { listUserChannels } from '../db/channels';
-import { createWebsocketConnection, deleteWebsocketConnection, getConnectionsForChannel, getConnectionsForDM } from '../db/websocket';
+import { createWebsocketConnection, deleteWebsocketConnection, getConnectionsForChannel } from '../db/websocket';
 import { publishTyping, publishPresence } from '../services/redis';
 import { v4 as uuidv4 } from 'uuid';
 import {
@@ -12,7 +12,6 @@ import {
   ErrorMessage,
   clientMessageSchema,
   ClientMessage,
-  ServerDirectMessage,
 } from './types';
 import { findUserById } from '../db/users';
 
@@ -126,7 +125,6 @@ export class WebSocketHandler {
           channelId: message.channelId,
           userId: ws.userId,
           username: ws.username!,
-          isDm: false,
         });
         break;
       default:
@@ -152,17 +150,6 @@ export class WebSocketHandler {
 
   public async broadcastToChannel(channelId: string, message: ServerMessage) {
     const connections = await getConnectionsForChannel(channelId, this.serverId);
-    for (const connection of connections) {
-      const ws = this.connections.get(connection.connection_id);
-      if (ws) {
-        this.sendMessage(ws, message);
-      }
-    }
-  }
-
-  public async broadcastToDm(channelId: string, message: ServerMessage) {
-    const connections = await getConnectionsForDM(channelId, this.serverId);
-    console.log('Connections for DM:', connections);
     for (const connection of connections) {
       const ws = this.connections.get(connection.connection_id);
       if (ws) {

@@ -10,15 +10,16 @@ const router = Router();
 
 // Schema for creating a channel
 const createChannelSchema = z.object({
-  name: z.string().min(1).max(100),
+  name: z.string().min(1).max(100).nullable(),
   is_private: z.boolean().default(false),
+  member_ids: z.array(z.string()).min(1),
 });
 
 type CreateChannelBody = z.infer<typeof createChannelSchema>;
 
 // Schema for updating a channel
 const updateChannelSchema = z.object({
-  name: z.string().min(1).max(100).optional(),
+  name: z.string().min(1).max(100).nullable().optional(),
   is_private: z.boolean().optional(),
 });
 
@@ -172,6 +173,7 @@ registry.registerPath({
             is_private: z.boolean(),
             created_at: z.string(),
             updated_at: z.string(),
+            usernames: z.array(z.string()),
           })).openapi('ListChannelsResponse'),
         },
       },
@@ -225,7 +227,10 @@ const listChannelsHandler: RequestHandler<{ id: string }> = async (req: AuthRequ
     const excludeMine = excludeMineParam === 'true';
 
     const channels = await listChannelsInWorkspace(req.params.id, req.user.id, search, excludeMine);
-    res.json(channels);
+    res.json(channels.map(channel => ({
+      ...channel,
+      usernames: channel.members.map(member => member.username),
+    })));
   } catch (error) {
     if (error instanceof Error && error.message === 'Not a member of the workspace') {
       res.status(403).json({ error: error.message });
@@ -259,12 +264,19 @@ registry.registerPath({
         'application/json': {
           schema: z.array(z.object({
             id: z.string(),
-            name: z.string(),
+            name: z.string().nullable(),
             is_private: z.boolean(),
             created_at: z.string(),
             updated_at: z.string(),
             workspace_id: z.string(),
             workspace_name: z.string(),
+            members: z.array(z.object({
+              id: z.string(),
+              username: z.string(),
+              email: z.string(),
+              created_at: z.string(),
+              updated_at: z.string(),
+            })),
           })).openapi('ListUserChannelsResponse'),
         },
       },
@@ -293,7 +305,13 @@ const listUserChannelsHandler: RequestHandler = async (req: AuthRequest, res) =>
     const workspaceId = typeof req.query.workspace_id === 'string' ? req.query.workspace_id : undefined;
 
     const channels = await listUserChannels(req.user.id, workspaceId);
-    res.json(channels);
+    const result = channels.map(({ members, ...channel }) => ({
+      ...channel,
+      usernames: members.map(member =>
+        member.username,
+      ),
+    }))
+    res.json(result);
   } catch (error) {
     console.error('List user channels error:', error);
     res.status(500).json({ error: 'Internal server error' });

@@ -33,17 +33,3 @@ export async function getConnectionsForChannel(channelId: string, serverId: stri
 
     return result;
 }
-
-export async function getConnectionsForDM(channelId: string, serverId: string) {
-    const result = await db
-        .selectFrom('websocket_connections')
-        .select('websocket_connections.connection_id')
-        .where('server_id', '=', serverId)
-        .innerJoin('users', 'users.id', 'websocket_connections.user_id')
-        .innerJoin('direct_message_members', 'direct_message_members.user_id', 'websocket_connections.user_id')
-        .where('direct_message_members.deleted_at', 'is', null)
-        .where('direct_message_members.channel_id', '=', channelId)
-        .execute();
-
-    return result;
-}
