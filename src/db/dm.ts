@@ -16,6 +16,7 @@ export type CreateDMChannelData = z.infer<typeof createDMChannelSchema>;
 // Schema for creating a DM message
 export const createDMMessageSchema = z.object({
     content: z.string().min(1),
+    parent_id: z.string().nullable(),
 });
 
 export type CreateDMMessageData = z.infer<typeof createDMMessageSchema>;
@@ -152,7 +153,9 @@ export async function createDMChannel(workspaceId: string, userId: string, other
 // Create a new DM message
 export async function createDMMessage(channelId: string, userId: string, data: CreateDMMessageData) {
     // Check if user is a participant
+    console.log("isDMChannelParticipant", channelId, userId);
     const isParticipant = await isDMChannelParticipant(channelId, userId);
+    console.log("isParticipant", isParticipant);
     if (!isParticipant) {
         throw new Error('Not a participant in this DM channel');
     }
@@ -168,11 +171,14 @@ export async function createDMMessage(channelId: string, userId: string, data: C
                 channel_id: channelId,
                 user_id: userId,
                 content: data.content,
+                parent_id: data.parent_id,
                 created_at: now,
                 updated_at: now,
             })
             .returningAll()
             .executeTakeFirstOrThrow();
+
+        console.log("message", message);
 
         // Get the username
         const user = await trx
@@ -180,6 +186,8 @@ export async function createDMMessage(channelId: string, userId: string, data: C
             .where('id', '=', userId)
             .select('username')
             .executeTakeFirstOrThrow();
+
+        console.log("user", user);
 
         return { ...message, username: user.username };
     });
@@ -190,7 +198,7 @@ export async function createDMMessage(channelId: string, userId: string, data: C
         message: {
             id: result.id.toString(),
             content: result.content,
-            parent_id: null,
+            parent_id: result.parent_id,
             created_at: result.created_at.toISOString(),
             updated_at: result.updated_at.toISOString(),
             user_id: result.user_id,
@@ -228,6 +236,7 @@ export async function listDMMessages(
             'm.updated_at',
             'm.user_id',
             'm.channel_id',
+            'm.parent_id',
             'u.username',
         ]);
 

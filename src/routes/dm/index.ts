@@ -17,6 +17,7 @@ type CreateDMChannelBody = z.infer<typeof createDMChannelSchema>;
 // Schema for sending a DM
 const sendDMSchema = z.object({
   content: z.string().min(1),
+  parent_id: z.string().nullable(),
 });
 
 type SendDMBody = z.infer<typeof sendDMSchema>;
@@ -359,6 +360,8 @@ registry.registerPath({
             created_at: z.string(),
             updated_at: z.string(),
             username: z.string(),
+            parent_id: z.string().nullable(),
+            channel_id: z.string(),
           })).openapi('GetDMMessagesResponse'),
         },
       },
