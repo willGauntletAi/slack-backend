@@ -137,6 +137,8 @@ export class WebSocketHandler {
       const validatedMessage = serverMessageSchema.safeParse(message);
       if (validatedMessage.success) {
         ws.send(JSON.stringify(validatedMessage.data));
+      } else {
+        console.error('Invalid server message:', validatedMessage.error);
       }
     }
   }
@@ -154,6 +156,8 @@ export class WebSocketHandler {
       const ws = this.connections.get(connection.connection_id);
       if (ws) {
         this.sendMessage(ws, message);
+      } else {
+        console.error(`Connection ${connection.connection_id} not found in memory`);
       }
     }
   }

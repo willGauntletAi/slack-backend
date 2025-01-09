@@ -64,8 +64,8 @@ export const presenceMessageSchema = z.object({
 export const reactionMessageSchema = z.object({
   type: z.literal('reaction'),
   channelId: z.string().uuid(),
-  messageId: z.string().uuid(),
-  id: z.string().uuid(),
+  messageId: z.string(),
+  id: z.string(),
   userId: z.string().uuid(),
   username: z.string(),
   emoji: z.string(),
