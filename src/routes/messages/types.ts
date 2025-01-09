@@ -2,6 +2,14 @@ import { z } from 'zod';
 import { createMessageSchema, updateMessageSchema } from '../../db/messages';
 import { createMessageReactionSchema } from '../../db/message-reactions';
 
+// Request schemas
+export const FileAttachmentSchema = z.object({
+    file_key: z.string(),
+    filename: z.string(),
+    mime_type: z.string(),
+    size: z.number(),
+});
+
 // Response schemas
 export const CreateMessageResponseSchema = z.object({
     id: z.string(),
@@ -11,6 +19,7 @@ export const CreateMessageResponseSchema = z.object({
     updated_at: z.string(),
     user_id: z.string(),
     channel_id: z.string(),
+    attachments: z.array(FileAttachmentSchema),
 });
 
 export const MessageReactionSchema = z.object({
@@ -31,6 +40,7 @@ export const ListMessagesResponseSchema = z.array(z.object({
     username: z.string(),
     channel_id: z.string(),
     reactions: z.array(MessageReactionSchema),
+    attachments: z.array(FileAttachmentSchema),
 }));
 
 export const UpdateMessageResponseSchema = CreateMessageResponseSchema;

@@ -31,6 +31,17 @@ export interface Channels {
   workspace_id: string;
 }
 
+export interface MessageAttachments {
+  created_at: Generated<Timestamp>;
+  file_key: string;
+  filename: string;
+  id: Generated<string>;
+  message_id: Int8;
+  mime_type: string;
+  size: Int8;
+  updated_at: Generated<Timestamp>;
+}
+
 export interface MessageReactions {
   created_at: Generated<Timestamp>;
   emoji: string;
@@ -96,6 +107,7 @@ export interface Workspaces {
 export interface DB {
   channel_members: ChannelMembers;
   channels: Channels;
+  message_attachments: MessageAttachments;
   message_reactions: MessageReactions;
   messages: Messages;
   refresh_tokens: RefreshTokens;

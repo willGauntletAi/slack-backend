@@ -14,6 +14,7 @@ import {
   UpdateMessageResponseSchema,
   CreateMessageReactionResponseSchema,
   ErrorResponseSchema,
+  FileAttachmentSchema,
 } from './types';
 
 const router = Router();
@@ -88,7 +89,12 @@ const createMessageHandler: RequestHandler<{ id: string }, {}, z.infer<typeof cr
 
     const data = createMessageSchema.parse(req.body);
     const message = await createMessage(req.params.id, req.user.id, data);
-    res.status(201).json(message);
+    res.status(201).json({
+      ...message,
+      created_at: message.created_at.toISOString(),
+      updated_at: message.updated_at.toISOString(),
+      parent_id: message.parent_id?.toString() || null,
+    });
   } catch (error) {
     if (error instanceof z.ZodError) {
       res.status(400).json({ error: error.errors });
@@ -280,7 +286,12 @@ const updateMessageHandler: RequestHandler<{ id: string }, {}, z.infer<typeof up
       res.status(404).json({ error: 'Message not found' });
       return;
     }
-    res.json(message);
+    res.json({
+      ...message,
+      created_at: message.created_at.toISOString(),
+      updated_at: message.updated_at.toISOString(),
+      parent_id: message.parent_id?.toString() || null,
+    });
   } catch (error) {
     if (error instanceof z.ZodError) {
       res.status(400).json({ error: error.errors });

@@ -8,6 +8,12 @@ import { jsonArrayFrom } from 'kysely/helpers/postgres';
 export const createMessageSchema = z.object({
   content: z.string().min(1),
   parent_id: z.string().optional(),
+  attachments: z.array(z.object({
+    file_key: z.string(),
+    filename: z.string(),
+    mime_type: z.string(),
+    size: z.number(),
+  })).default([]),
 });
 
 export type CreateMessageData = z.infer<typeof createMessageSchema>;
@@ -15,6 +21,12 @@ export type CreateMessageData = z.infer<typeof createMessageSchema>;
 // Schema for updating a message
 export const updateMessageSchema = z.object({
   content: z.string().min(1),
+  attachments: z.array(z.object({
+    file_key: z.string(),
+    filename: z.string(),
+    mime_type: z.string(),
+    size: z.number(),
+  })).default([]),
 });
 
 export type UpdateMessageData = z.infer<typeof updateMessageSchema>;
@@ -45,6 +57,24 @@ export async function createMessage(channelId: string, userId: string, data: Cre
       .returningAll()
       .executeTakeFirstOrThrow();
 
+    // Create attachments if any
+    if (data.attachments.length > 0) {
+      await trx
+        .insertInto('message_attachments')
+        .values(
+          data.attachments.map(attachment => ({
+            message_id: message.id,
+            file_key: attachment.file_key,
+            filename: attachment.filename,
+            mime_type: attachment.mime_type,
+            size: BigInt(attachment.size),
+            created_at: now,
+            updated_at: now,
+          }))
+        )
+        .execute();
+    }
+
     // Get the username
     const user = await trx
       .selectFrom('users')
@@ -52,7 +82,21 @@ export async function createMessage(channelId: string, userId: string, data: Cre
       .select('username')
       .executeTakeFirstOrThrow();
 
-    return { ...message, username: user.username };
+    // Get attachments
+    const attachments = await trx
+      .selectFrom('message_attachments')
+      .where('message_id', '=', message.id)
+      .select(['id', 'file_key', 'filename', 'mime_type', 'size'])
+      .execute();
+
+    return {
+      ...message,
+      username: user.username,
+      attachments: attachments.map(att => ({
+        ...att,
+        size: Number(att.size)
+      }))
+    };
   });
 
   // Publish the new message event
@@ -102,24 +146,62 @@ export async function listChannelMessages(
         eb.selectFrom('message_reactions as mr')
           .innerJoin('users as ru', 'ru.id', 'mr.user_id')
           .select(['mr.id', 'mr.emoji', 'mr.message_id', 'mr.user_id', 'ru.username'])
-          .whereRef('mr.message_id', '=', 'm.id')).as('reactions')
+          .whereRef('mr.message_id', '=', 'm.id')
+      ).as('reactions'),
+      jsonArrayFrom(
+        eb.selectFrom('message_attachments as ma')
+          .select(['ma.id', 'ma.file_key', 'ma.filename', 'ma.mime_type', 'ma.size'])
+          .whereRef('ma.message_id', '=', 'm.id')
+      ).as('attachments')
     ]);
 
   if (before) {
     query = query.where('m.id', '<', before);
   }
 
-  return await query.execute();
+  const messages = await query.execute();
+
+  // Convert BigInt sizes to numbers
+  return messages.map(msg => ({
+    ...msg,
+    attachments: msg.attachments.map(att => ({
+      ...att,
+      size: Number(att.size)
+    }))
+  }));
 }
 
 // Get a message by ID
 export async function getMessageById(messageId: string) {
-  return await db
-    .selectFrom('messages')
-    .where('id', '=', messageId)
-    .where('deleted_at', 'is', null)
-    .selectAll()
+  const message = await db
+    .selectFrom('messages as m')
+    .where('m.id', '=', messageId)
+    .where('m.deleted_at', 'is', null)
+    .select(eb => [
+      'm.id',
+      'm.content',
+      'm.parent_id',
+      'm.created_at',
+      'm.updated_at',
+      'm.user_id',
+      'm.channel_id',
+      jsonArrayFrom(
+        eb.selectFrom('message_attachments as ma')
+          .select(['ma.id', 'ma.file_key', 'ma.filename', 'ma.mime_type', 'ma.size'])
+          .whereRef('ma.message_id', '=', 'm.id')
+      ).as('attachments')
+    ])
     .executeTakeFirst();
+
+  if (!message) return null;
+
+  return {
+    ...message,
+    attachments: message.attachments.map(att => ({
+      ...att,
+      size: Number(att.size)
+    }))
+  };
 }
 
 // Update a message
@@ -136,18 +218,61 @@ export async function updateMessage(messageId: string, userId: string, data: Upd
 
   const now = new Date().toISOString();
 
-  const updatedMessage = await db
-    .updateTable('messages')
-    .set({
-      content: data.content,
-      updated_at: now,
-    })
-    .where('id', '=', messageId)
-    .where('deleted_at', 'is', null)
-    .returningAll()
-    .executeTakeFirst();
+  // Use a transaction to update the message and attachments
+  const result = await db.transaction().execute(async (trx) => {
+    // Update the message
+    const updatedMessage = await trx
+      .updateTable('messages')
+      .set({
+        content: data.content,
+        updated_at: now,
+      })
+      .where('id', '=', messageId)
+      .where('deleted_at', 'is', null)
+      .returningAll()
+      .executeTakeFirstOrThrow();
 
-  return updatedMessage;
+    // Delete existing attachments
+    await trx
+      .deleteFrom('message_attachments')
+      .where('message_id', '=', messageId)
+      .execute();
+
+    // Create new attachments
+    if (data.attachments.length > 0) {
+      await trx
+        .insertInto('message_attachments')
+        .values(
+          data.attachments.map(attachment => ({
+            message_id: messageId,
+            file_key: attachment.file_key,
+            filename: attachment.filename,
+            mime_type: attachment.mime_type,
+            size: BigInt(attachment.size),
+            created_at: now,
+            updated_at: now,
+          }))
+        )
+        .execute();
+    }
+
+    // Get updated attachments
+    const attachments = await trx
+      .selectFrom('message_attachments')
+      .where('message_id', '=', messageId)
+      .select(['id', 'file_key', 'filename', 'mime_type', 'size'])
+      .execute();
+
+    return {
+      ...updatedMessage,
+      attachments: attachments.map(att => ({
+        ...att,
+        size: Number(att.size)
+      }))
+    };
+  });
+
+  return result;
 }
 
 // Delete a message (soft delete)
