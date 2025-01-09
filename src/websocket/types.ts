@@ -61,11 +61,24 @@ export const presenceMessageSchema = z.object({
   description: 'User presence event',
 });
 
+export const reactionMessageSchema = z.object({
+  type: z.literal('reaction'),
+  channelId: z.string().uuid(),
+  messageId: z.string().uuid(),
+  id: z.string().uuid(),
+  userId: z.string().uuid(),
+  username: z.string(),
+  emoji: z.string(),
+}).openapi({
+  description: 'Reaction event',
+});
+
 export const serverMessageSchema = z.discriminatedUnion('type', [
   newMessageSchema,
   connectedMessageSchema,
   typingMessageSchema,
   presenceMessageSchema,
+  reactionMessageSchema,
 ]).or(errorMessageSchema);
 
 // Type exports
@@ -74,4 +87,5 @@ export type ServerMessage = z.infer<typeof serverMessageSchema>;
 export type NewMessageEvent = z.infer<typeof newMessageSchema>;
 export type ConnectedMessage = z.infer<typeof connectedMessageSchema>;
 export type ErrorMessage = z.infer<typeof errorMessageSchema>;
-export type PresenceMessage = z.infer<typeof presenceMessageSchema>; 
+export type PresenceMessage = z.infer<typeof presenceMessageSchema>;
+export type ReactionMessage = z.infer<typeof reactionMessageSchema>; 

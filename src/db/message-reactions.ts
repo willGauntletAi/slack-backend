@@ -2,6 +2,8 @@ import { db } from './index';
 import { z } from 'zod';
 import { isChannelMember } from './channels';
 import { getMessageById } from './messages';
+import { publishReaction } from '../services/redis';
+import { findUserById } from './users';
 
 // Schema for creating a message reaction
 export const createMessageReactionSchema = z.object({
@@ -47,6 +49,22 @@ export async function addMessageReaction(messageId: string, userId: string, data
         })
         .returningAll()
         .executeTakeFirstOrThrow();
+
+    // Get user info for the event
+    const user = await findUserById(userId);
+    if (!user) {
+        throw new Error('User not found');
+    }
+
+    // Publish the reaction event
+    await publishReaction({
+        channelId: message.channel_id,
+        messageId,
+        reactionId: reaction.id,
+        userId,
+        username: user.username,
+        emoji: data.emoji,
+    });
 
     return reaction;
 } 

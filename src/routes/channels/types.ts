@@ -4,7 +4,7 @@ import { z } from 'zod';
 export const createChannelSchema = z.object({
     name: z.string().min(1).max(100).nullable(),
     is_private: z.boolean().default(false),
-    member_ids: z.array(z.string()).min(1),
+    member_ids: z.array(z.string()).default([]),
 });
 
 export const updateChannelSchema = z.object({
@@ -19,6 +19,7 @@ export const ChannelSchema = z.object({
     is_private: z.boolean(),
     created_at: z.string(),
     updated_at: z.string(),
+    usernames: z.array(z.string()),
 });
 
 export const UserSchema = z.object({

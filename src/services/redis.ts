@@ -57,7 +57,7 @@ class RedisService {
     }
 
     console.log('Setting up Redis subscriptions');
-    this.subscriber.subscribe('new_message', 'typing', 'presence', (err) => {
+    this.subscriber.subscribe('new_message', 'typing', 'presence', 'reaction', (err) => {
       if (err) {
         console.error('Failed to subscribe to channels:', err);
         this.isSubscribed = false;
@@ -81,6 +81,9 @@ class RedisService {
             break;
           case 'presence':
             this.handlePresence(JSON.parse(message));
+            break;
+          case 'reaction':
+            this.handleReaction(JSON.parse(message));
             break;
           default:
             console.log('Unhandled channel:', channel);
@@ -135,6 +138,24 @@ class RedisService {
     });
   }
 
+  private handleReaction(event: RedisReactionEvent) {
+    if (!this.wsHandler) {
+      console.error('WebSocket handler not initialized');
+      return;
+    }
+
+    console.log('Handling reaction event:', event);
+    this.wsHandler.broadcastToChannel(event.channelId, {
+      type: 'reaction',
+      channelId: event.channelId,
+      messageId: event.messageId,
+      id: event.reactionId,
+      userId: event.userId,
+      username: event.username,
+      emoji: event.emoji,
+    });
+  }
+
   public async publishNewMessage(payload: RedisMessageEvent) {
     console.log('Publishing new message:', payload);
     const result = await this.publisher.publish('new_message', JSON.stringify(payload));
@@ -152,6 +173,13 @@ class RedisService {
   public async publishPresence(payload: RedisPresenceEvent) {
     console.log('Publishing presence event:', payload);
     const result = await this.publisher.publish('presence', JSON.stringify(payload));
+    console.log('Publish result:', result);
+    return result;
+  }
+
+  public async publishReaction(payload: RedisReactionEvent) {
+    console.log('Publishing reaction event:', payload);
+    const result = await this.publisher.publish('reaction', JSON.stringify(payload));
     console.log('Publish result:', result);
     return result;
   }
@@ -182,8 +210,18 @@ interface RedisPresenceEvent {
   status: 'online' | 'offline';
 }
 
+interface RedisReactionEvent {
+  channelId: string;
+  messageId: string;
+  reactionId: string;
+  userId: string;
+  username: string;
+  emoji: string;
+}
+
 const redisService = new RedisService();
 export const initializeRedis = redisService.initialize.bind(redisService);
 export const publishNewMessage = redisService.publishNewMessage.bind(redisService);
 export const publishTyping = redisService.publishTyping.bind(redisService);
 export const publishPresence = redisService.publishPresence.bind(redisService);
+export const publishReaction = redisService.publishReaction.bind(redisService);

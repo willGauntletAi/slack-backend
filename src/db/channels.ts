@@ -8,7 +8,7 @@ import { jsonArrayFrom } from 'kysely/helpers/postgres';
 export const createChannelSchema = z.object({
   name: z.string().min(1).max(100).nullable(),
   is_private: z.boolean().default(false),
-  member_ids: z.array(z.string()).min(1),
+  member_ids: z.array(z.string()).default([]),
 });
 
 export type CreateChannelData = z.infer<typeof createChannelSchema>;
@@ -23,18 +23,25 @@ export type UpdateChannelData = z.infer<typeof updateChannelSchema>;
 
 // Create a new channel and add the creator and specified members
 export async function createChannel(workspaceId: string, userId: string, data: CreateChannelData) {
-  // Verify all members are in the workspace
-  const memberIds = [...new Set([userId, ...data.member_ids])];
-  for (const memberId of memberIds) {
-    const isMemberInWorkspace = await isWorkspaceMember(workspaceId, memberId);
-    if (!isMemberInWorkspace) {
-      throw new Error(`User ${memberId} is not a member of the workspace`);
+  // Verify creator is in the workspace
+  const isMemberInWorkspace = await isWorkspaceMember(workspaceId, userId);
+  if (!isMemberInWorkspace) {
+    throw new Error(`User ${userId} is not a member of the workspace`);
+  }
+
+  // If there are additional members, verify they are in the workspace
+  if (data.member_ids.length > 0) {
+    for (const memberId of data.member_ids) {
+      const isMemberInWorkspace = await isWorkspaceMember(workspaceId, memberId);
+      if (!isMemberInWorkspace) {
+        throw new Error(`User ${memberId} is not a member of the workspace`);
+      }
     }
   }
 
   const now = new Date().toISOString();
 
-  // Use a transaction to create the channel and add all members
+  // Use a transaction to create the channel and add members if specified
   return await db.transaction().execute(async (trx) => {
     // Create the channel
     const channel = await trx
@@ -49,7 +56,8 @@ export async function createChannel(workspaceId: string, userId: string, data: C
       .returningAll()
       .executeTakeFirstOrThrow();
 
-    // Add all specified members
+    // Add creator and specified members if any
+    const memberIds = [...new Set([userId, ...data.member_ids])];
     await trx
       .insertInto('channel_members')
       .values(
@@ -178,17 +186,35 @@ export async function updateChannel(channelId: string, userId: string, data: Upd
 
   const now = new Date().toISOString();
 
-  return await db
-    .updateTable('channels')
+  const updatedChannel = await db
+    .updateTable('channels as c')
     .set({
       ...data,
       name: data.name ?? sql`NULL`,
       updated_at: now,
     })
-    .where('id', '=', channelId)
-    .where('deleted_at', 'is', null)
-    .returningAll()
+    .where('c.id', '=', channelId)
+    .where('c.deleted_at', 'is', null)
+    .returning((eb) => [
+      'c.id',
+      'c.name',
+      'c.is_private',
+      'c.created_at',
+      'c.updated_at',
+      jsonArrayFrom(
+        eb.selectFrom('users')
+          .select(['username'])
+          .innerJoin('channel_members', join =>
+            join
+              .onRef('channel_members.user_id', '=', 'users.id')
+              .onRef('channel_members.channel_id', '=', 'c.id')
+          )
+          .where('channel_members.deleted_at', 'is', null)
+      ).as('usernames')
+    ])
     .executeTakeFirstOrThrow();
+
+  return updatedChannel;
 }
 
 // Add a member to a channel

@@ -113,6 +113,7 @@ const createChannelHandler: RequestHandler<{ id: string }, CreateChannelResponse
       is_private: channel.is_private,
       created_at: channel.created_at.toISOString(),
       updated_at: channel.updated_at.toISOString(),
+      usernames: channel.usernames,
     };
     res.status(201).json(response);
   } catch (error) {
@@ -366,6 +367,7 @@ const updateChannelHandler: RequestHandler<{ id: string }, UpdateChannelResponse
       is_private: channel.is_private,
       created_at: channel.created_at.toISOString(),
       updated_at: channel.updated_at.toISOString(),
+      usernames: channel.usernames.map(username => username.username),
     };
     res.json(response);
   } catch (error) {
