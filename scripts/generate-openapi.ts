@@ -13,6 +13,7 @@ import '../src/routes/users';
 import '../src/routes/workspaces';
 import '../src/routes/channels';
 import '../src/routes/messages';
+import '../src/routes/files';
 
 import { generateOpenApiDocument } from '../src/utils/openapi';
 
@@ -35,6 +36,5 @@ const wsTypesPath = join(__dirname, '../../slack_frontend/ws-types.ts');
 copyFileSync(join(__dirname, '../src/websocket/types.ts'), wsTypesPath);
 
 console.log(`WebSocket types saved to ${wsTypesPath}`);
-
 
 process.exit(0);
