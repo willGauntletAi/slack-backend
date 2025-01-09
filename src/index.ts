@@ -42,7 +42,30 @@ app.use('/message', messagesRouter);
 app.use('/file', filesRouter);
 
 const port = process.env.PORT || 3000;
-server.listen(port, () => {
+const httpServer = server.listen(port, () => {
   console.log(`Server running on port ${port}`);
   console.log(`API documentation available at http://localhost:${port}/api-docs`);
 });
+
+// Graceful shutdown handlers
+async function shutdown(signal: string) {
+  console.log(`\n${signal} received. Starting graceful shutdown...`);
+
+  // Cleanup websocket connections
+  await wsHandler.cleanup();
+
+  // Close HTTP server
+  httpServer.close(() => {
+    console.log('HTTP server closed');
+    process.exit(0);
+  });
+
+  // If server hasn't closed in 10 seconds, force exit
+  setTimeout(() => {
+    console.error('Could not close connections in time, forcefully shutting down');
+    process.exit(1);
+  }, 10000);
+}
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));

@@ -33,3 +33,10 @@ export async function getConnectionsForChannel(channelId: string, serverId: stri
 
     return result;
 }
+
+export async function deleteAllServerConnections(serverId: string) {
+    await db
+        .deleteFrom('websocket_connections')
+        .where('server_id', '=', serverId)
+        .execute();
+}

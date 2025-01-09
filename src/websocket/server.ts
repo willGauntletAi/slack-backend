@@ -2,7 +2,7 @@ import { WebSocket, WebSocketServer } from 'ws';
 import { Server } from 'http';
 import { verifyToken } from '../utils/jwt';
 import { listUserChannels } from '../db/channels';
-import { createWebsocketConnection, deleteWebsocketConnection, getConnectionsForChannel } from '../db/websocket';
+import { createWebsocketConnection, deleteWebsocketConnection, getConnectionsForChannel, deleteAllServerConnections } from '../db/websocket';
 import { publishTyping, publishPresence } from '../services/redis';
 import { v4 as uuidv4 } from 'uuid';
 import {
@@ -166,5 +166,27 @@ export class WebSocketHandler {
     for (const ws of this.connections.values()) {
       this.sendMessage(ws, message);
     }
+  }
+
+  public async cleanup() {
+    console.log('Cleaning up WebSocket connections...');
+
+    // Close all websocket connections
+    for (const ws of this.connections.values()) {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.close(1001, 'Server shutting down');
+      }
+    }
+
+    // Clear the connections map
+    this.connections.clear();
+
+    // Remove all connections for this server from the database
+    await deleteAllServerConnections(this.serverId);
+
+    // Close the WebSocket server
+    this.wss.close();
+
+    console.log('WebSocket cleanup complete');
   }
 } 
