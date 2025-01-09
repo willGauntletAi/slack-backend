@@ -100,7 +100,7 @@ export async function listChannelMessages(
       'u.username',
       jsonArrayFrom(
         eb.selectFrom('message_reactions as mr')
-          .innerJoin('users as ru', 'u.id', 'mr.user_id')
+          .innerJoin('users as ru', 'ru.id', 'mr.user_id')
           .select(['mr.id', 'mr.emoji', 'mr.message_id', 'mr.user_id', 'ru.username'])
           .whereRef('mr.message_id', '=', 'm.id')).as('reactions')
     ]);
