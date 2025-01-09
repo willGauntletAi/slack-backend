@@ -4,6 +4,7 @@ import type { RequestHandler } from 'express';
 import { authenticate, AuthRequest } from '../../middleware/auth';
 import { registry } from '../../utils/openapi';
 import { createMessage, listChannelMessages, updateMessage, deleteMessage, createMessageSchema, updateMessageSchema } from '../../db/messages';
+import { addMessageReaction, createMessageReactionSchema } from '../../db/message-reactions';
 
 const router = Router();
 
@@ -403,9 +404,126 @@ const deleteMessageHandler: RequestHandler<{ id: string }> = async (req: AuthReq
   }
 };
 
+// POST /message/:id/reaction - Add a reaction to a message
+registry.registerPath({
+  method: 'post',
+  path: '/message/{id}/reaction',
+  tags: ['messages'],
+  summary: 'Add a reaction to a message',
+  security: [{ bearerAuth: [] }],
+  parameters: [
+    {
+      name: 'id',
+      in: 'path',
+      required: true,
+      schema: { type: 'string' },
+      description: 'Message ID',
+    },
+  ],
+  request: {
+    body: {
+      content: {
+        'application/json': {
+          schema: createMessageReactionSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    '201': {
+      description: 'Reaction added successfully',
+      content: {
+        'application/json': {
+          schema: z.object({
+            id: z.string(),
+            emoji: z.string(),
+            message_id: z.string(),
+            user_id: z.string(),
+            created_at: z.string(),
+          }).openapi('CreateMessageReactionResponse'),
+        },
+      },
+    },
+    '400': {
+      description: 'Invalid request body',
+      content: {
+        'application/json': {
+          schema: z.object({
+            error: z.string(),
+          }),
+        },
+      },
+    },
+    '401': {
+      description: 'Not authenticated',
+      content: {
+        'application/json': {
+          schema: z.object({
+            error: z.string(),
+          }),
+        },
+      },
+    },
+    '403': {
+      description: 'Not a member of the channel',
+      content: {
+        'application/json': {
+          schema: z.object({
+            error: z.string(),
+          }),
+        },
+      },
+    },
+    '404': {
+      description: 'Message not found',
+      content: {
+        'application/json': {
+          schema: z.object({
+            error: z.string(),
+          }),
+        },
+      },
+    },
+  },
+});
+
+const addReactionHandler: RequestHandler<{ id: string }, {}, z.infer<typeof createMessageReactionSchema>> = async (req: AuthRequest, res) => {
+  try {
+    if (!req.user?.id) {
+      res.status(401).json({ error: 'Not authenticated' });
+      return;
+    }
+
+    const data = createMessageReactionSchema.parse(req.body);
+    const reaction = await addMessageReaction(req.params.id, req.user.id, data);
+    res.status(201).json(reaction);
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      res.status(400).json({ error: error.errors });
+      return;
+    }
+    if (error instanceof Error) {
+      switch (error.message) {
+        case 'Message not found':
+          res.status(404).json({ error: error.message });
+          return;
+        case 'Not a member of this channel':
+          res.status(403).json({ error: error.message });
+          return;
+        case 'User has already reacted with this emoji':
+          res.status(400).json({ error: error.message });
+          return;
+      }
+    }
+    console.error('Add reaction error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
 router.post('/channel/:id', authenticate, createMessageHandler);
 router.get('/channel/:id', authenticate, listMessagesHandler);
 router.put('/:id', authenticate, updateMessageHandler);
 router.delete('/:id', authenticate, deleteMessageHandler);
+router.post('/:id/reaction', authenticate, addReactionHandler);
 
 export default router; 
