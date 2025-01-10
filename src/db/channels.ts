@@ -137,6 +137,18 @@ export async function listChannelsInWorkspace(
       'c.is_private',
       'c.created_at',
       'c.updated_at',
+      'cm.last_read_message',
+      eb.selectFrom('messages as m')
+        .select(eb.fn.countAll().as('count'))
+        .where('m.channel_id', '=', eb.ref('c.id'))
+        .where('m.deleted_at', 'is', null)
+        .where((eb) =>
+          eb.or([
+            eb('cm.last_read_message', 'is', null),
+            eb('m.id', '>', eb.ref('cm.last_read_message'))
+          ])
+        )
+        .as('unread_count'),
       jsonArrayFrom(
         eb.selectFrom('users')
           .select([
@@ -336,6 +348,18 @@ export async function listUserChannels(userId: string, workspaceId?: string) {
       'c.updated_at',
       'c.workspace_id',
       'w.name as workspace_name',
+      'cm.last_read_message',
+      eb.selectFrom('messages as m')
+        .select(eb.fn.countAll().as('count'))
+        .where('m.channel_id', '=', eb.ref('c.id'))
+        .where('m.deleted_at', 'is', null)
+        .where((eb) =>
+          eb.or([
+            eb('cm.last_read_message', 'is', null),
+            eb('m.id', '>', eb.ref('cm.last_read_message'))
+          ])
+        )
+        .as('unread_count'),
       jsonArrayFrom(
         eb.selectFrom('users')
           .select([
@@ -352,5 +376,37 @@ export async function listUserChannels(userId: string, workspaceId?: string) {
           .where('channel_members.deleted_at', 'is', null)
       ).as('members')
     ])
+    .execute();
+}
+
+// Update the last read message for a channel member
+export async function updateLastReadMessage(channelId: string, userId: string, messageId: string) {
+  // First check if the message exists and belongs to this channel
+  const message = await db
+    .selectFrom('messages')
+    .where('id', '=', messageId)
+    .where('channel_id', '=', channelId)
+    .where('deleted_at', 'is', null)
+    .select('id')
+    .executeTakeFirst();
+
+  if (!message) {
+    throw new Error('Message not found or does not belong to this channel');
+  }
+
+  // Update the last_read_message only if it's greater than the current one
+  return await db
+    .updateTable('channel_members')
+    .set({
+      last_read_message: sql`CASE 
+        WHEN last_read_message IS NULL THEN ${messageId}::bigint
+        WHEN last_read_message < ${messageId}::bigint THEN ${messageId}::bigint
+        ELSE last_read_message
+      END`,
+      updated_at: new Date().toISOString(),
+    })
+    .where('channel_id', '=', channelId)
+    .where('user_id', '=', userId)
+    .where('deleted_at', 'is', null)
     .execute();
 } 

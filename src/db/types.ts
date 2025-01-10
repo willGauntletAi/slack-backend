@@ -17,6 +17,7 @@ export interface ChannelMembers {
   channel_id: string;
   deleted_at: Timestamp | null;
   joined_at: Generated<Timestamp>;
+  last_read_message: Int8 | null;
   updated_at: Generated<Timestamp>;
   user_id: string;
 }

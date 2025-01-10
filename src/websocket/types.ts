@@ -9,6 +9,14 @@ export const clientTypingMessageSchema = z.object({
   channelId: z.string().uuid(),
 });
 
+export const clientMarkReadSchema = z.object({
+  type: z.literal('mark_read'),
+  channelId: z.string().uuid(),
+  messageId: z.string(),
+}).openapi({
+  description: 'Mark messages as read up to the given message ID',
+});
+
 export const clientSubscribePresenceSchema = z.object({
   type: z.literal('subscribe_to_presence'),
   userId: z.string().uuid(),
@@ -25,6 +33,7 @@ export const clientUnsubscribePresenceSchema = z.object({
 
 export const clientMessageSchema = z.discriminatedUnion('type', [
   clientTypingMessageSchema,
+  clientMarkReadSchema,
   clientSubscribePresenceSchema,
   clientUnsubscribePresenceSchema,
 ]);

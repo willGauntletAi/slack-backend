@@ -1,7 +1,7 @@
 import { WebSocket, WebSocketServer } from 'ws';
 import { Server } from 'http';
 import { verifyToken } from '../utils/jwt';
-import { listUserChannels } from '../db/channels';
+import { listUserChannels, updateLastReadMessage } from '../db/channels';
 import { createWebsocketConnection, deleteWebsocketConnection, getConnectionsForChannel, deleteAllServerConnections, getUserPresenceStatus } from '../db/websocket';
 import { publishTyping, publishPresence } from '../services/redis';
 import { v4 as uuidv4 } from 'uuid';
@@ -139,6 +139,15 @@ export class WebSocketHandler {
           userId: ws.userId,
           username: ws.username!,
         });
+        break;
+      case 'mark_read':
+        try {
+          await updateLastReadMessage(message.channelId, ws.userId, message.messageId);
+        } catch (error) {
+          if (error instanceof Error) {
+            this.sendError(ws, error.message);
+          }
+        }
         break;
       case 'subscribe_to_presence':
         this.handlePresenceSubscription(ws.connectionId, message.userId);

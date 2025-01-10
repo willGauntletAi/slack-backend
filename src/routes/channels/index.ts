@@ -219,6 +219,8 @@ const listChannelsHandler: RequestHandler<{ id: string }, ListChannelsResponse |
       created_at: channel.created_at.toISOString(),
       updated_at: channel.updated_at.toISOString(),
       usernames: channel.members.map(member => member.username),
+      unread_count: Number(channel.unread_count || 0),
+      last_read_message: channel.last_read_message?.toString() ?? null,
     }));
     res.json(response);
   } catch (error) {
@@ -275,6 +277,8 @@ const listUserChannelsHandler: RequestHandler<{}, ListUserChannelsResponse | Err
       workspace_id: channel.workspace_id,
       workspace_name: channel.workspace_name,
       usernames: channel.members.map(member => member.username),
+      unread_count: Number(channel.unread_count || 0),
+      last_read_message: channel.last_read_message?.toString() ?? null,
     }));
     res.json(response);
   } catch (error) {
