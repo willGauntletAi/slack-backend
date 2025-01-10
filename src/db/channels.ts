@@ -259,6 +259,16 @@ export async function addChannelMember(channelId: string, userId: string, addedB
 
   const now = new Date().toISOString();
 
+  // Get the latest message ID in the channel
+  const latestMessage = await db
+    .selectFrom('messages')
+    .where('channel_id', '=', channelId)
+    .where('deleted_at', 'is', null)
+    .select('id')
+    .orderBy('id', 'desc')
+    .limit(1)
+    .executeTakeFirst();
+
   // Check if there's an existing membership record
   const existingMembership = await db
     .selectFrom('channel_members')
@@ -278,6 +288,7 @@ export async function addChannelMember(channelId: string, userId: string, addedB
       .set({
         deleted_at: null,
         joined_at: now,
+        last_read_message: latestMessage?.id ?? null,
       })
       .where('channel_id', '=', channelId)
       .where('user_id', '=', userId)
@@ -291,6 +302,7 @@ export async function addChannelMember(channelId: string, userId: string, addedB
       channel_id: channelId,
       user_id: userId,
       joined_at: now,
+      last_read_message: latestMessage?.id ?? null,
     })
     .execute();
 }
