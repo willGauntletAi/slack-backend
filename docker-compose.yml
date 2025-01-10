@@ -16,5 +16,22 @@ services:
     ports:
       - "6379:6379"
 
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "80:80"
+    environment:
+      - DATABASE_URL=postgresql://user:password@postgres:5432/dbname
+      - REDIS_URL=redis://redis:6379
+      - PORT=80
+      - JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
+      - JWT_ACCESS_EXPIRATION=15m
+      - JWT_REFRESH_EXPIRATION=7d
+    depends_on:
+      - postgres
+      - redis
+
 volumes:
   slack_postgres_data:
