@@ -135,6 +135,7 @@ const getDownloadUrlHandler: RequestHandler<{ key: string }, DownloadUrlResponse
         const url = await generateDownloadUrl(req.params.key);
         res.json({ url });
     } catch (error) {
+        console.log(error);
         console.error('Get download URL error:', error);
         if (error instanceof Error && error.message === 'The specified key does not exist.') {
             res.status(404).json({ error: 'File not found' });

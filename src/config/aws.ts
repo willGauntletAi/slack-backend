@@ -14,10 +14,10 @@ const awsConfigSchema = z.object({
 declare global {
     namespace NodeJS {
         interface ProcessEnv {
-            AWS_REGION: string;
-            AWS_ACCESS_KEY_ID: string;
-            AWS_SECRET_ACCESS_KEY: string;
-            AWS_S3_BUCKET: string;
+            SLACK_AWS_REGION: string;
+            SLACK_AWS_ACCESS_KEY_ID: string;
+            SLACK_AWS_SECRET_ACCESS_KEY: string;
+            SLACK_AWS_S3_BUCKET: string;
         }
     }
 }
@@ -32,9 +32,9 @@ export const awsConfig = isScript
         AWS_SECRET_ACCESS_KEY: 'dummy-secret',
         AWS_S3_BUCKET: 'dummy-bucket',
     }
-    : awsConfigSchema.parse({
-        AWS_REGION: process.env.AWS_REGION,
-        AWS_ACCESS_KEY_ID: process.env.AWS_ACCESS_KEY_ID,
-        AWS_SECRET_ACCESS_KEY: process.env.AWS_SECRET_ACCESS_KEY,
-        AWS_S3_BUCKET: process.env.AWS_S3_BUCKET,
-    }); 
+    : {
+        AWS_REGION: process.env.SLACK_AWS_REGION,
+        AWS_ACCESS_KEY_ID: process.env.SLACK_AWS_ACCESS_KEY_ID,
+        AWS_SECRET_ACCESS_KEY: process.env.SLACK_AWS_SECRET_ACCESS_KEY,
+        AWS_S3_BUCKET: process.env.SLACK_AWS_S3_BUCKET,
+    }; 
