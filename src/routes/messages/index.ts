@@ -138,6 +138,20 @@ registry.registerPath({
       schema: { type: 'string' },
       description: 'Message ID to fetch messages before',
     },
+    {
+      name: 'after',
+      in: 'query',
+      required: false,
+      schema: { type: 'string' },
+      description: 'Message ID to fetch messages after',
+    },
+    {
+      name: 'around',
+      in: 'query',
+      required: false,
+      schema: { type: 'string' },
+      description: 'Message ID to fetch messages around (before and after)',
+    },
   ],
   responses: {
     '200': {
@@ -145,6 +159,14 @@ registry.registerPath({
       content: {
         'application/json': {
           schema: ListMessagesResponseSchema.openapi('ListMessagesResponse'),
+        },
+      },
+    },
+    '400': {
+      description: 'Invalid request parameters',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
         },
       },
     },
@@ -171,7 +193,7 @@ const listMessagesHandler: RequestHandler<
   { id: string },
   z.infer<typeof ListMessagesResponseSchema> | { error: string },
   {},
-  { limit?: string; before?: string }
+  { limit?: string; before?: string; after?: string; around?: string }
 > = async (req: AuthRequest, res) => {
   try {
     if (!req.user?.id) {
@@ -181,8 +203,17 @@ const listMessagesHandler: RequestHandler<
 
     const limit = req.query.limit ? parseInt(req.query.limit as string) : 50;
     const before = typeof req.query.before === 'string' ? req.query.before : undefined;
+    const after = typeof req.query.after === 'string' ? req.query.after : undefined;
+    const around = typeof req.query.around === 'string' ? req.query.around : undefined;
 
-    const messages = await listChannelMessages(req.params.id, req.user.id, limit, before);
+    // Check that only one of before, after, or around is provided
+    const providedParams = [before, after, around].filter(Boolean).length;
+    if (providedParams > 1) {
+      res.status(400).json({ error: 'Only one of before, after, or around can be provided' });
+      return;
+    }
+
+    const messages = await listChannelMessages(req.params.id, req.user.id, limit, before, after, around);
     const formattedMessages = messages.map(msg => ({
       ...msg,
       created_at: msg.created_at.toISOString(),

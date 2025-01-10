@@ -118,7 +118,9 @@ export async function listChannelMessages(
   channelId: string,
   userId: string,
   limit: number = 50,
-  before?: string // message ID to fetch messages before
+  before?: string,
+  after?: string,
+  around?: string
 ) {
   // Check if user is a member of the channel
   const isMember = await isChannelMember(channelId, userId);
@@ -132,7 +134,6 @@ export async function listChannelMessages(
     .where('m.channel_id', '=', channelId)
     .where('m.deleted_at', 'is', null)
     .orderBy('m.id', 'desc')
-    .limit(limit)
     .select(eb => [
       'm.id',
       'm.content',
@@ -157,9 +158,56 @@ export async function listChannelMessages(
 
   if (before) {
     query = query.where('m.id', '<', before);
+    query = query.limit(limit);
+  } else if (after) {
+    query = query
+      .where('m.id', '>', after)
+      .orderBy('m.id', 'asc')
+      .limit(limit);
+  } else if (around) {
+    // For 'around', we want messages before and after the target message
+    const halfLimit = Math.floor(limit / 2);
+
+    // Get messages before and after in separate queries
+    const beforeQuery = db
+      .selectFrom('messages as m')
+      .where('m.channel_id', '=', channelId)
+      .where('m.deleted_at', 'is', null)
+      .where('m.id', '<', around)
+      .orderBy('m.id', 'desc')
+      .limit(halfLimit)
+      .select('m.id');
+
+    const afterQuery = db
+      .selectFrom('messages as m')
+      .where('m.channel_id', '=', channelId)
+      .where('m.deleted_at', 'is', null)
+      .where('m.id', '>', around)
+      .orderBy('m.id', 'asc')
+      .limit(halfLimit)
+      .select('m.id');
+
+    // Combine the queries with the target message
+    query = query
+      .where(eb =>
+        eb.or([
+          eb('m.id', '=', around),
+          eb('m.id', 'in', beforeQuery),
+          eb('m.id', 'in', afterQuery)
+        ])
+      )
+      .orderBy('m.id', 'desc');
+  } else {
+    query = query.limit(limit);
   }
 
   const messages = await query.execute();
+
+  // If we fetched with 'after', we need to reverse the results to maintain
+  // consistent ordering (newest first)
+  if (after) {
+    messages.reverse();
+  }
 
   // Convert BigInt sizes to numbers
   return messages.map(msg => ({
