@@ -10,6 +10,7 @@ import workspacesRouter from "./routes/workspaces";
 import channelsRouter from "./routes/channels";
 import messagesRouter from "./routes/messages";
 import filesRouter from "./routes/files";
+import searchRouter from "./routes/search";
 import { extendZodWithOpenApi } from '@asteasolutions/zod-to-openapi';
 import { z } from 'zod';
 import swaggerUi from 'swagger-ui-express';
@@ -40,6 +41,7 @@ app.use('/workspace', workspacesRouter);
 app.use('/channel', channelsRouter);
 app.use('/message', messagesRouter);
 app.use('/file', filesRouter);
+app.use('/search', searchRouter);
 
 const port = process.env.PORT || 3000;
 const httpServer = server.listen(port, () => {
