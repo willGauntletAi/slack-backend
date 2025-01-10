@@ -291,6 +291,13 @@ registry.registerPath({
       schema: { type: 'string' },
       description: 'Search term to filter users by username or email',
     },
+    {
+      name: 'excludeChannelMembers',
+      in: 'query',
+      required: false,
+      schema: { type: 'string' },
+      description: 'Channel ID to exclude members from',
+    },
   ],
   responses: {
     '200': {
@@ -349,7 +356,11 @@ const getWorkspaceUsersHandler: RequestHandler<{ id: string }, GetWorkspaceUsers
       return;
     }
 
-    const users = await getWorkspaceUsers(req.params.id, req.query.search as string | undefined);
+    const users = await getWorkspaceUsers(
+      req.params.id,
+      req.query.search as string | undefined,
+      req.query.excludeChannelMembers as string | undefined
+    );
     const response: GetWorkspaceUsersResponse = users.map(user => ({
       ...user,
       joined_at: user.joined_at.toISOString(),

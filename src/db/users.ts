@@ -68,7 +68,7 @@ export async function checkUsersShareWorkspace(userId1: string, userId2: string)
 }
 
 // Get users in a workspace
-export async function getWorkspaceUsers(workspaceId: string, search?: string) {
+export async function getWorkspaceUsers(workspaceId: string, search?: string, excludeChannelId?: string) {
   let query = db
     .selectFrom('users as u')
     .innerJoin('workspace_members as wm', 'u.id', 'wm.user_id')
@@ -82,6 +82,20 @@ export async function getWorkspaceUsers(workspaceId: string, search?: string) {
         eb('u.username', 'ilike', `%${search}%`),
         eb('u.email', 'ilike', `%${search}%`)
       ])
+    );
+  }
+
+  // Exclude users who are members of the specified channel
+  if (excludeChannelId) {
+    query = query.where(eb =>
+      eb.not(
+        eb.exists(
+          eb.selectFrom('channel_members as cm')
+            .where('cm.channel_id', '=', excludeChannelId)
+            .where('cm.user_id', '=', eb.ref('u.id'))
+            .where('cm.deleted_at', 'is', null)
+        )
+      )
     );
   }
 
