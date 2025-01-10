@@ -40,3 +40,24 @@ export async function deleteAllServerConnections(serverId: string) {
         .where('server_id', '=', serverId)
         .execute();
 }
+
+export async function getUserPresenceStatus(userId: string): Promise<'online' | 'offline'> {
+    // First check if there's a status override
+    const user = await db
+        .selectFrom('users')
+        .where('id', '=', userId)
+        .select(['override_status'])
+        .executeTakeFirst();
+
+    if (user?.override_status === 'online') return 'online';
+    if (user?.override_status === 'offline') return 'offline';
+
+    // If no override or invalid override, check connection status
+    const connection = await db
+        .selectFrom('websocket_connections')
+        .where('user_id', '=', userId)
+        .selectAll()
+        .executeTakeFirst();
+
+    return connection ? 'online' : 'offline';
+}

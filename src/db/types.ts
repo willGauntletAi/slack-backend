@@ -75,6 +75,7 @@ export interface Users {
   deleted_at: Timestamp | null;
   email: string;
   id: Generated<string>;
+  override_status: string | null;
   password_hash: string;
   updated_at: Generated<Timestamp>;
   username: string;

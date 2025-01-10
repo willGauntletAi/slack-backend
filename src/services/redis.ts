@@ -132,7 +132,7 @@ class RedisService {
     }
 
     console.log('Handling presence event:', event);
-    this.wsHandler.broadcastToAll({
+    this.wsHandler.broadcastPresenceUpdate(event.userId, {
       type: 'presence',
       userId: event.userId,
       username: event.username,

@@ -2,7 +2,7 @@ import { WebSocket, WebSocketServer } from 'ws';
 import { Server } from 'http';
 import { verifyToken } from '../utils/jwt';
 import { listUserChannels } from '../db/channels';
-import { createWebsocketConnection, deleteWebsocketConnection, getConnectionsForChannel, deleteAllServerConnections } from '../db/websocket';
+import { createWebsocketConnection, deleteWebsocketConnection, getConnectionsForChannel, deleteAllServerConnections, getUserPresenceStatus } from '../db/websocket';
 import { publishTyping, publishPresence } from '../services/redis';
 import { v4 as uuidv4 } from 'uuid';
 import {
@@ -12,6 +12,7 @@ import {
   ErrorMessage,
   clientMessageSchema,
   ClientMessage,
+  presenceMessageSchema,
 } from './types';
 import { findUserById } from '../db/users';
 
@@ -25,6 +26,7 @@ export class WebSocketHandler {
   private wss: WebSocketServer;
   private serverId: string;
   private connections: Map<string, WebSocketWithUser> = new Map();
+  private presenceSubscriptions: Map<string, Set<string>> = new Map(); // userId -> Set of connectionIds
 
   constructor(server: Server) {
     this.serverId = uuidv4();
@@ -55,6 +57,11 @@ export class WebSocketHandler {
           this.connections.set(ws.connectionId, ws);
 
           // Publish presence event for new connection
+          const user = await findUserById(ws.userId);
+          if (user?.override_status) {
+            // Don't publish online status if user has an override
+            return;
+          }
           await publishPresence({
             userId: ws.userId,
             username: ws.username!,
@@ -88,11 +95,17 @@ export class WebSocketHandler {
           if (ws.connectionId) {
             // Remove from connections map
             this.connections.delete(ws.connectionId);
+            // Clean up presence subscriptions
+            this.cleanupPresenceSubscriptions(ws.connectionId);
             // Remove from database using connection ID
             await deleteWebsocketConnection(ws.connectionId);
 
-            // Publish presence event for disconnection
             if (ws.userId && ws.username) {
+              const user = await findUserById(ws.userId);
+              if (user?.override_status) {
+                // Don't publish offline status if user has an override
+                return;
+              }
               await publishPresence({
                 userId: ws.userId,
                 username: ws.username,
@@ -114,7 +127,7 @@ export class WebSocketHandler {
   }
 
   private async handleMessage(ws: WebSocketWithUser, message: ClientMessage) {
-    if (!ws.userId) {
+    if (!ws.userId || !ws.connectionId) {
       this.sendError(ws, 'Not authenticated');
       return;
     }
@@ -127,8 +140,69 @@ export class WebSocketHandler {
           username: ws.username!,
         });
         break;
+      case 'subscribe_to_presence':
+        this.handlePresenceSubscription(ws.connectionId, message.userId);
+        break;
+      case 'unsubscribe_from_presence':
+        this.handlePresenceUnsubscription(ws.connectionId, message.userId);
+        break;
       default:
-        console.log('Unhandled message type:', message.type);
+        console.log('Unhandled message type:', message);
+    }
+  }
+
+  private async handlePresenceSubscription(connectionId: string, targetUserId: string) {
+    if (!this.presenceSubscriptions.has(targetUserId)) {
+      this.presenceSubscriptions.set(targetUserId, new Set());
+    }
+    this.presenceSubscriptions.get(targetUserId)!.add(connectionId);
+
+    // Send initial presence state
+    const ws = this.connections.get(connectionId);
+    if (ws && ws.userId) {
+      const targetUser = await findUserById(targetUserId);
+      const status = await getUserPresenceStatus(targetUserId);
+
+      if (targetUser) {
+        const presenceMessage: ServerMessage = {
+          type: 'presence',
+          userId: targetUserId,
+          username: targetUser.username,
+          status,
+        };
+        this.sendMessage(ws, presenceMessage);
+      }
+    }
+  }
+
+  private handlePresenceUnsubscription(connectionId: string, targetUserId: string) {
+    const subscriptions = this.presenceSubscriptions.get(targetUserId);
+    if (subscriptions) {
+      subscriptions.delete(connectionId);
+      if (subscriptions.size === 0) {
+        this.presenceSubscriptions.delete(targetUserId);
+      }
+    }
+  }
+
+  private cleanupPresenceSubscriptions(connectionId: string) {
+    for (const [userId, subscriptions] of this.presenceSubscriptions.entries()) {
+      subscriptions.delete(connectionId);
+      if (subscriptions.size === 0) {
+        this.presenceSubscriptions.delete(userId);
+      }
+    }
+  }
+
+  public broadcastPresenceUpdate(userId: string, message: ServerMessage) {
+    const subscriptions = this.presenceSubscriptions.get(userId);
+    if (!subscriptions) return;
+
+    for (const connectionId of subscriptions) {
+      const ws = this.connections.get(connectionId);
+      if (ws) {
+        this.sendMessage(ws, message);
+      }
     }
   }
 

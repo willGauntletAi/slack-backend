@@ -1,7 +1,7 @@
 import { db } from './index';
 import type { Users } from './types';
 
-export type CreateUserData = Omit<Users, 'id' | 'created_at' | 'updated_at' | 'deleted_at'>;
+export type CreateUserData = Omit<Users, 'id' | 'created_at' | 'updated_at' | 'deleted_at' | 'override_status'> & { override_status?: string | null };
 export type UpdateUserData = Partial<CreateUserData>;
 
 export async function findUserByEmailOrUsername(email: string, username: string) {
