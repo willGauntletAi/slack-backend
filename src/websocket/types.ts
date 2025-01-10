@@ -25,6 +25,13 @@ export const newMessageSchema = z.object({
     updated_at: z.string(),
     user_id: z.string().uuid(),
     username: z.string(),
+    attachments: z.array(z.object({
+      id: z.string(),
+      file_key: z.string(),
+      filename: z.string(),
+      mime_type: z.string(),
+      size: z.number(),
+    })).default([]),
   }),
 }).openapi({
   description: 'New message event',

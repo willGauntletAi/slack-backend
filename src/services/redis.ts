@@ -211,6 +211,13 @@ interface RedisMessageEvent {
     updated_at: string;
     user_id: string;
     username: string;
+    attachments: Array<{
+      id: string;
+      file_key: string;
+      filename: string;
+      mime_type: string;
+      size: number;
+    }>;
   };
 }
 

@@ -6,7 +6,7 @@ import { jsonArrayFrom } from 'kysely/helpers/postgres';
 
 // Schema for creating a message
 export const createMessageSchema = z.object({
-  content: z.string().min(1),
+  content: z.string(),
   parent_id: z.string().optional(),
   attachments: z.array(z.object({
     file_key: z.string(),
