@@ -245,6 +245,14 @@ export class WebSocketHandler {
     }
   }
 
+  public broadcastToUsers(userIds: string[], message: ServerMessage) {
+    for (const [connectionId, ws] of this.connections.entries()) {
+      if (ws.userId && userIds.includes(ws.userId)) {
+        this.sendMessage(ws, message);
+      }
+    }
+  }
+
   public broadcastToAll(message: ServerMessage) {
     for (const ws of this.connections.values()) {
       this.sendMessage(ws, message);

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { isWorkspaceMember } from './workspaces';
 import { sql } from 'kysely';
 import { jsonArrayFrom } from 'kysely/helpers/postgres';
+import { publishChannelJoin } from '../services/redis';
 
 // Schema for creating a channel
 export const createChannelSchema = z.object({
@@ -42,7 +43,7 @@ export async function createChannel(workspaceId: string, userId: string, data: C
   const now = new Date().toISOString();
 
   // Use a transaction to create the channel and add members if specified
-  return await db.transaction().execute(async (trx) => {
+  const result = await db.transaction().execute(async (trx) => {
     // Create the channel
     const channel = await trx
       .insertInto('channels')
@@ -79,8 +80,30 @@ export async function createChannel(workspaceId: string, userId: string, data: C
     return {
       ...channel,
       usernames: members.map(m => m.username),
+      members,
+      memberIds,
     };
   });
+
+  // Publish channel join event
+  await publishChannelJoin({
+    channelId: result.id,
+    userIds: result.memberIds,
+    channel: {
+      id: result.id,
+      name: result.name,
+      is_private: result.is_private,
+      workspace_id: result.workspace_id,
+      created_at: new Date(result.created_at).toISOString(),
+      updated_at: new Date(result.updated_at).toISOString(),
+      members: result.members,
+    },
+  });
+
+  return {
+    ...result,
+    usernames: result.usernames,
+  };
 }
 
 // List channels in a workspace
@@ -283,7 +306,7 @@ export async function addChannelMember(channelId: string, userId: string, addedB
     }
 
     // Reactivate the membership
-    return await db
+    await db
       .updateTable('channel_members')
       .set({
         deleted_at: null,
@@ -293,18 +316,59 @@ export async function addChannelMember(channelId: string, userId: string, addedB
       .where('channel_id', '=', channelId)
       .where('user_id', '=', userId)
       .execute();
+  } else {
+    // Create new membership
+    await db
+      .insertInto('channel_members')
+      .values({
+        channel_id: channelId,
+        user_id: userId,
+        joined_at: now,
+        last_read_message: latestMessage?.id ?? null,
+      })
+      .execute();
   }
 
-  // Create new membership
-  return await db
-    .insertInto('channel_members')
-    .values({
-      channel_id: channelId,
-      user_id: userId,
-      joined_at: now,
-      last_read_message: latestMessage?.id ?? null,
-    })
-    .execute();
+  // Get channel details and members for the join event
+  const channelDetails = await db
+    .selectFrom('channels as c')
+    .where('c.id', '=', channelId)
+    .select(eb => [
+      'c.id',
+      'c.name',
+      'c.is_private',
+      'c.workspace_id',
+      'c.created_at',
+      'c.updated_at',
+      jsonArrayFrom(
+        eb.selectFrom('users')
+          .select(['username'])
+          .innerJoin('channel_members', join =>
+            join
+              .onRef('channel_members.user_id', '=', 'users.id')
+              .onRef('channel_members.channel_id', '=', eb.ref('c.id'))
+          )
+          .where('channel_members.deleted_at', 'is', null)
+      ).as('members')
+    ])
+    .executeTakeFirstOrThrow();
+
+  // Publish channel join event
+  await publishChannelJoin({
+    channelId: channelDetails.id,
+    userIds: [userId],
+    channel: {
+      id: channelDetails.id,
+      name: channelDetails.name,
+      is_private: channelDetails.is_private,
+      workspace_id: channelDetails.workspace_id,
+      created_at: new Date(channelDetails.created_at).toISOString(),
+      updated_at: new Date(channelDetails.updated_at).toISOString(),
+      members: channelDetails.members,
+    },
+  });
+
+  return channelDetails;
 }
 
 // Remove a member from a channel

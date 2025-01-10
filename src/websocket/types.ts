@@ -62,6 +62,24 @@ export const newMessageSchema = z.object({
   description: 'New message event',
 });
 
+export const channelJoinMessageSchema = z.object({
+  type: z.literal('channel_join'),
+  channelId: z.string().uuid(),
+  channel: z.object({
+    id: z.string().uuid(),
+    name: z.string().nullable(),
+    is_private: z.boolean(),
+    workspace_id: z.string().uuid(),
+    created_at: z.string(),
+    updated_at: z.string(),
+    members: z.array(z.object({
+      username: z.string()
+    }))
+  })
+}).openapi({
+  description: 'Channel join event',
+});
+
 export const connectedMessageSchema = z.object({
   type: z.literal('connected'),
   userId: z.string().uuid(),
@@ -121,6 +139,7 @@ export const serverMessageSchema = z.discriminatedUnion('type', [
   presenceMessageSchema,
   reactionMessageSchema,
   deleteReactionMessageSchema,
+  channelJoinMessageSchema,
 ]).or(errorMessageSchema);
 
 // Type exports
@@ -131,4 +150,5 @@ export type ConnectedMessage = z.infer<typeof connectedMessageSchema>;
 export type ErrorMessage = z.infer<typeof errorMessageSchema>;
 export type PresenceMessage = z.infer<typeof presenceMessageSchema>;
 export type ReactionMessage = z.infer<typeof reactionMessageSchema>;
-export type DeleteReactionMessage = z.infer<typeof deleteReactionMessageSchema>; 
+export type DeleteReactionMessage = z.infer<typeof deleteReactionMessageSchema>;
+export type ChannelJoinMessage = z.infer<typeof channelJoinMessageSchema>; 

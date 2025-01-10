@@ -54,7 +54,7 @@ class RedisService {
     }
 
     console.log('Setting up Redis subscriptions');
-    this.subscriber.subscribe('new_message', 'typing', 'presence', 'reaction', 'delete_reaction', (err) => {
+    this.subscriber.subscribe('new_message', 'typing', 'presence', 'reaction', 'delete_reaction', 'channel_join', (err) => {
       if (err) {
         console.error('Failed to subscribe to channels:', err);
         this.isSubscribed = false;
@@ -86,6 +86,10 @@ class RedisService {
           case 'delete_reaction':
             console.log('Received delete reaction event on Redis channel:', message);
             this.handleDeleteReaction(JSON.parse(message));
+            break;
+          case 'channel_join':
+            console.log('Received channel join event on Redis channel:', message);
+            this.handleChannelJoin(JSON.parse(message));
             break;
           default:
             console.log('Unhandled channel:', channel);
@@ -173,6 +177,20 @@ class RedisService {
     });
   }
 
+  private handleChannelJoin(event: RedisChannelJoinEvent) {
+    if (!this.wsHandler) {
+      console.error('WebSocket handler not initialized');
+      return;
+    }
+
+    console.log('Handling channel join event:', event);
+    this.wsHandler.broadcastToUsers(event.userIds, {
+      type: 'channel_join',
+      channelId: event.channelId,
+      channel: event.channel
+    });
+  }
+
   public async publishNewMessage(payload: RedisMessageEvent) {
     const result = await this.publisher.publish('new_message', JSON.stringify(payload));
     return result;
@@ -196,6 +214,13 @@ class RedisService {
   public async publishDeletedReaction(payload: RedisDeleteReactionEvent) {
     console.log('Publishing delete reaction event:', payload);
     const result = await this.publisher.publish('delete_reaction', JSON.stringify(payload));
+    console.log('Publish result:', result);
+    return result;
+  }
+
+  public async publishChannelJoin(payload: RedisChannelJoinEvent) {
+    console.log('Publishing channel join event:', payload);
+    const result = await this.publisher.publish('channel_join', JSON.stringify(payload));
     console.log('Publish result:', result);
     return result;
   }
@@ -248,6 +273,22 @@ interface RedisDeleteReactionEvent {
   reactionId: string;
 }
 
+interface RedisChannelJoinEvent {
+  channelId: string;
+  userIds: string[];
+  channel: {
+    id: string;
+    name: string | null;
+    is_private: boolean;
+    workspace_id: string;
+    created_at: string;
+    updated_at: string;
+    members: Array<{
+      username: string;
+    }>;
+  };
+}
+
 const redisService = new RedisService();
 export const initializeRedis = redisService.initialize.bind(redisService);
 export const publishNewMessage = redisService.publishNewMessage.bind(redisService);
@@ -255,3 +296,4 @@ export const publishTyping = redisService.publishTyping.bind(redisService);
 export const publishPresence = redisService.publishPresence.bind(redisService);
 export const publishReaction = redisService.publishReaction.bind(redisService);
 export const publishDeletedReaction = redisService.publishDeletedReaction.bind(redisService);
+export const publishChannelJoin = redisService.publishChannelJoin.bind(redisService);
