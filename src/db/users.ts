@@ -1,5 +1,6 @@
 import { db } from './index';
 import type { Users } from './types';
+import { defaultConfig } from '../config/defaults';
 
 export type CreateUserData = Omit<Users, 'id' | 'created_at' | 'updated_at' | 'deleted_at' | 'override_status'> & { override_status?: string | null };
 export type UpdateUserData = Partial<CreateUserData>;
@@ -136,4 +137,42 @@ export async function getChannelUsers(channelId: string, search?: string) {
       'cm.joined_at',
     ])
     .execute();
+}
+
+/**
+ * Creates a new user and adds them to the default workspace and channel
+ */
+export async function createUserWithDefaults(data: CreateUserData) {
+  return await db.transaction().execute(async (trx) => {
+    // Create user
+    const user = await trx
+      .insertInto('users')
+      .values(data)
+      .returning(['id', 'email', 'username', 'created_at', 'updated_at'])
+      .executeTakeFirstOrThrow();
+
+    // Add user to default workspace as a member
+    const now = new Date().toISOString();
+    await trx
+      .insertInto('workspace_members')
+      .values({
+        workspace_id: defaultConfig.DEFAULT_WORKSPACE_ID!,
+        user_id: user.id,
+        role: 'member',
+        joined_at: now,
+      })
+      .execute();
+
+    // Add user to default channel
+    await trx
+      .insertInto('channel_members')
+      .values({
+        channel_id: defaultConfig.DEFAULT_CHANNEL_ID!,
+        user_id: user.id,
+        joined_at: now,
+      })
+      .execute();
+
+    return user;
+  });
 } 

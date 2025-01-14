@@ -3,7 +3,7 @@ import { z } from 'zod';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import type { RequestHandler } from 'express';
-import { findUserByEmailOrUsername, createUser, findUserByEmail } from '../../db/users';
+import { findUserByEmailOrUsername, findUserByEmail, createUserWithDefaults } from '../../db/users';
 import { createRefreshToken, findRefreshToken, revokeRefreshToken, revokeAllUserRefreshTokens } from '../../db/refresh-tokens';
 import { jwtConfig } from '../../config/jwt';
 import { defaultConfig } from '../../config/defaults';
@@ -109,61 +109,30 @@ const registerHandler: RequestHandler<{}, RegisterResponse | ErrorResponse, Regi
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(password, salt);
 
-    // Use a transaction to create user and add them to default workspace/channel
-    const result = await db.transaction().execute(async (trx) => {
-      // Create user
-      const user = await trx
-        .insertInto('users')
-        .values({
-          username,
-          email,
-          password_hash: passwordHash,
-        })
-        .returning(['id', 'email', 'username', 'created_at', 'updated_at'])
-        .executeTakeFirstOrThrow();
-
-      // Add user to default workspace as a member
-      const now = new Date().toISOString();
-      await trx
-        .insertInto('workspace_members')
-        .values({
-          workspace_id: defaultConfig.DEFAULT_WORKSPACE_ID!,
-          user_id: user.id,
-          role: 'member',
-          joined_at: now,
-        })
-        .execute();
-
-      // Add user to default channel
-      await trx
-        .insertInto('channel_members')
-        .values({
-          channel_id: defaultConfig.DEFAULT_CHANNEL_ID!,
-          user_id: user.id,
-          joined_at: now,
-        })
-        .execute();
-
-      return user;
+    // Create user and add to default workspace/channel
+    const user = await createUserWithDefaults({
+      username,
+      email,
+      password_hash: passwordHash,
     });
 
     // Generate tokens
-    const tokens = generateTokens(result.id);
+    const tokens = generateTokens(user.id);
 
     // Store refresh token
     await createRefreshToken({
-      user_id: result.id,
+      user_id: user.id,
       token: tokens.refreshToken,
       expires_at: getExpirationDate(),
     });
 
     const response: RegisterResponse = {
       user: {
-        id: result.id,
-        username: result.username,
-        email: result.email,
-        created_at: result.created_at.toISOString(),
-        updated_at: result.updated_at.toISOString(),
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        created_at: user.created_at.toISOString(),
+        updated_at: user.updated_at.toISOString(),
       },
       accessToken: tokens.accessToken,
       refreshToken: tokens.refreshToken,
