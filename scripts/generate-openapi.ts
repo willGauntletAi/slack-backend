@@ -15,6 +15,7 @@ import '../src/routes/channels';
 import '../src/routes/messages';
 import '../src/routes/files';
 import '../src/routes/search';
+import '../src/routes/embeddings';
 
 import { generateOpenApiDocument } from '../src/utils/openapi';
 

@@ -1,11 +1,19 @@
 version: "3.8"
 services:
   postgres:
-    image: postgres:15
+    image: pgvector/pgvector:pg16
     environment:
       POSTGRES_USER: user
       POSTGRES_PASSWORD: password
       POSTGRES_DB: dbname
+      POSTGRES_INITDB_ARGS: "--no-locale --encoding=UTF8"
+    command: >
+      bash -c "
+        docker-entrypoint.sh postgres &
+        sleep 10 &&
+        psql -U user -d dbname -c 'CREATE EXTENSION IF NOT EXISTS vector;' &&
+        wait
+      "
     volumes:
       - slack_postgres_data:/var/lib/postgresql/data
     ports:
@@ -16,22 +24,22 @@ services:
     ports:
       - "6379:6379"
 
-  server:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    ports:
-      - "80:80"
-    environment:
-      - DATABASE_URL=postgresql://user:password@postgres:5432/dbname
-      - REDIS_URL=redis://redis:6379
-      - PORT=80
-      - JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
-      - JWT_ACCESS_EXPIRATION=15m
-      - JWT_REFRESH_EXPIRATION=7d
-    depends_on:
-      - postgres
-      - redis
+  # server:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile
+  #   ports:
+  #     - "80:80"
+  #   environment:
+  #     - DATABASE_URL=postgresql://user:password@postgres:5432/dbname
+  #     - REDIS_URL=redis://redis:6379
+  #     - PORT=80
+  #     - JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
+  #     - JWT_ACCESS_EXPIRATION=15m
+  #     - JWT_REFRESH_EXPIRATION=7d
+  #   depends_on:
+  #     - postgres
+  #     - redis
 
 volumes:
   slack_postgres_data:

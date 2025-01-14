@@ -11,6 +11,7 @@ import channelsRouter from "./routes/channels";
 import messagesRouter from "./routes/messages";
 import filesRouter from "./routes/files";
 import searchRouter from "./routes/search";
+import embeddingsRouter from "./routes/embeddings";
 import { extendZodWithOpenApi } from '@asteasolutions/zod-to-openapi';
 import { z } from 'zod';
 import swaggerUi from 'swagger-ui-express';
@@ -42,6 +43,7 @@ app.use('/channel', channelsRouter);
 app.use('/message', messagesRouter);
 app.use('/file', filesRouter);
 app.use('/search', searchRouter);
+app.use('/embeddings', embeddingsRouter);
 
 const port = process.env.PORT || 3000;
 const httpServer = server.listen(port, () => {

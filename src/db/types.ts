@@ -43,6 +43,13 @@ export interface MessageAttachments {
   updated_at: Generated<Timestamp>;
 }
 
+export interface MessageEmbeddings {
+  created_at: Generated<Timestamp | null>;
+  embedding: string;
+  message_id: Int8;
+  model: string;
+}
+
 export interface MessageReactions {
   created_at: Generated<Timestamp>;
   emoji: string;
@@ -110,6 +117,7 @@ export interface DB {
   channel_members: ChannelMembers;
   channels: Channels;
   message_attachments: MessageAttachments;
+  message_embeddings: MessageEmbeddings;
   message_reactions: MessageReactions;
   messages: Messages;
   refresh_tokens: RefreshTokens;

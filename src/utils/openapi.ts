@@ -27,5 +27,39 @@ export function generateOpenApiDocument(): OpenAPIObject {
         description: 'Local development server',
       },
     ],
+    tags: [
+      {
+        name: 'auth',
+        description: 'Authentication endpoints',
+      },
+      {
+        name: 'users',
+        description: 'User management endpoints',
+      },
+      {
+        name: 'workspaces',
+        description: 'Workspace management endpoints',
+      },
+      {
+        name: 'channels',
+        description: 'Channel management endpoints',
+      },
+      {
+        name: 'messages',
+        description: 'Message management endpoints',
+      },
+      {
+        name: 'files',
+        description: 'File management endpoints',
+      },
+      {
+        name: 'search',
+        description: 'Search endpoints',
+      },
+      {
+        name: 'embeddings',
+        description: 'Message embedding generation endpoints',
+      },
+    ],
   });
 }

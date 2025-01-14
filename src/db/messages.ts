@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { isChannelMember } from './channels';
 import { publishNewMessage } from '../services/redis';
 import { jsonArrayFrom } from 'kysely/helpers/postgres';
+import { sql } from 'kysely';
 
 // Schema for creating a message
 export const createMessageSchema = z.object({
@@ -347,4 +348,21 @@ export async function deleteMessage(messageId: string, userId: string) {
     .executeTakeFirst();
 
   return deletedMessage;
-} 
+}
+
+// Message embedding operations
+interface MessageForEmbedding {
+  id: string;
+  content: string;
+}
+
+export async function getMessagesWithoutEmbeddings(): Promise<MessageForEmbedding[]> {
+  return db
+    .selectFrom('messages')
+    .leftJoin('message_embeddings', 'messages.id', 'message_embeddings.message_id')
+    .select(['messages.id', 'messages.content'])
+    .where('message_embeddings.message_id', 'is', null)
+    .where('messages.content', 'is not', null)
+    .where('messages.deleted_at', 'is', null)
+    .execute();
+}
