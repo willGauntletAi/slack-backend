@@ -19,6 +19,7 @@ export const ChannelSchema = z.object({
     is_private: z.boolean(),
     created_at: z.string(),
     updated_at: z.string(),
+    lastUpdated: z.string(),
     usernames: z.array(z.string()),
 });
 
@@ -36,6 +37,7 @@ export const ListChannelSchema = z.object({
     is_private: z.boolean(),
     created_at: z.string(),
     updated_at: z.string(),
+    lastUpdated: z.string(),
     usernames: z.array(z.string()),
     unread_count: z.number(),
     last_read_message: z.string().nullable(),
@@ -47,6 +49,7 @@ export const UserChannelSchema = z.object({
     is_private: z.boolean(),
     created_at: z.string(),
     updated_at: z.string(),
+    lastUpdated: z.string(),
     workspace_id: z.string(),
     workspace_name: z.string(),
     usernames: z.array(z.string()),

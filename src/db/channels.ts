@@ -4,6 +4,8 @@ import { isWorkspaceMember } from './workspaces';
 import { sql } from 'kysely';
 import { jsonArrayFrom } from 'kysely/helpers/postgres';
 import { publishChannelJoin } from '../services/redis';
+import { ExpressionBuilder } from 'kysely';
+import type { DB } from './types';
 
 // Schema for creating a channel
 export const createChannelSchema = z.object({
@@ -21,6 +23,29 @@ export const updateChannelSchema = z.object({
 });
 
 export type UpdateChannelData = z.infer<typeof updateChannelSchema>;
+
+// Helper function to generate the lastUpdated SQL expression
+function getLastUpdatedExpression<T extends DB>(
+  eb: ExpressionBuilder<T, any>,
+  channelIdRef: string,
+  userId: string
+) {
+  return sql<Date>`GREATEST(
+    COALESCE((
+      SELECT MAX(created_at)
+      FROM messages
+      WHERE channel_id = ${eb.ref(channelIdRef)}
+      AND deleted_at IS NULL
+    ), '1970-01-01'),
+    COALESCE((
+      SELECT updated_at
+      FROM channel_members
+      WHERE channel_id = ${eb.ref(channelIdRef)}
+      AND user_id = ${userId}
+      AND deleted_at IS NULL
+    ), '1970-01-01')
+  )`.as('lastUpdated');
+}
 
 // Create a new channel and add the creator and specified members
 export async function createChannel(workspaceId: string, userId: string, data: CreateChannelData) {
@@ -82,6 +107,7 @@ export async function createChannel(workspaceId: string, userId: string, data: C
       usernames: members.map(m => m.username),
       members,
       memberIds,
+      lastUpdated: now,
     };
   });
 
@@ -160,6 +186,7 @@ export async function listChannelsInWorkspace(
       'c.is_private',
       'c.created_at',
       'c.updated_at',
+      getLastUpdatedExpression(eb, 'c.id', userId),
       'cm.last_read_message',
       eb.selectFrom('messages as m')
         .select(eb.fn.countAll().as('count'))
@@ -180,7 +207,7 @@ export async function listChannelsInWorkspace(
           .innerJoin('channel_members', join =>
             join
               .onRef('channel_members.user_id', '=', 'users.id')
-              .onRef('channel_members.channel_id', '=', 'c.id')
+              .onRef('channel_members.channel_id', '=', eb.ref('c.id'))
           )
           .where('channel_members.deleted_at', 'is', null)
       ).as('members')
@@ -236,13 +263,14 @@ export async function updateChannel(channelId: string, userId: string, data: Upd
       'c.is_private',
       'c.created_at',
       'c.updated_at',
+      getLastUpdatedExpression(eb, 'c.id', userId),
       jsonArrayFrom(
         eb.selectFrom('users')
           .select(['username'])
           .innerJoin('channel_members', join =>
             join
               .onRef('channel_members.user_id', '=', 'users.id')
-              .onRef('channel_members.channel_id', '=', 'c.id')
+              .onRef('channel_members.channel_id', '=', eb.ref('c.id'))
           )
           .where('channel_members.deleted_at', 'is', null)
       ).as('usernames')
@@ -424,6 +452,7 @@ export async function listUserChannels(userId: string, workspaceId?: string) {
       'c.updated_at',
       'c.workspace_id',
       'w.name as workspace_name',
+      getLastUpdatedExpression(eb, 'c.id', userId),
       'cm.last_read_message',
       eb.selectFrom('messages as m')
         .select(eb.fn.countAll().as('count'))

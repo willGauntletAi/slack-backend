@@ -113,6 +113,7 @@ const createChannelHandler: RequestHandler<{ id: string }, CreateChannelResponse
       is_private: channel.is_private,
       created_at: channel.created_at.toISOString(),
       updated_at: channel.updated_at.toISOString(),
+      lastUpdated: new Date(channel.lastUpdated).toISOString(),
       usernames: channel.usernames,
     };
     res.status(201).json(response);
@@ -218,6 +219,7 @@ const listChannelsHandler: RequestHandler<{ id: string }, ListChannelsResponse |
       is_private: channel.is_private,
       created_at: channel.created_at.toISOString(),
       updated_at: channel.updated_at.toISOString(),
+      lastUpdated: new Date(channel.lastUpdated).toISOString(),
       usernames: channel.members.map(member => member.username),
       unread_count: Number(channel.unread_count || 0),
       last_read_message: channel.last_read_message?.toString() ?? null,
@@ -274,6 +276,7 @@ const listUserChannelsHandler: RequestHandler<{}, ListUserChannelsResponse | Err
       is_private: channel.is_private,
       created_at: channel.created_at.toISOString(),
       updated_at: channel.updated_at.toISOString(),
+      lastUpdated: new Date(channel.lastUpdated).toISOString(),
       workspace_id: channel.workspace_id,
       workspace_name: channel.workspace_name,
       usernames: channel.members.map(member => member.username),
@@ -371,6 +374,7 @@ const updateChannelHandler: RequestHandler<{ id: string }, UpdateChannelResponse
       is_private: channel.is_private,
       created_at: channel.created_at.toISOString(),
       updated_at: channel.updated_at.toISOString(),
+      lastUpdated: new Date(channel.lastUpdated).toISOString(),
       usernames: channel.usernames.map(username => username.username),
     };
     res.json(response);
