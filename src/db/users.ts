@@ -140,7 +140,7 @@ export async function getChannelUsers(channelId: string, search?: string) {
 }
 
 /**
- * Creates a new user and adds them to the default workspace and channel
+ * Creates a new user and optionally adds them to the default workspace and channel if configured
  */
 export async function createUserWithDefaults(data: CreateUserData) {
   return await db.transaction().execute(async (trx) => {
@@ -151,27 +151,42 @@ export async function createUserWithDefaults(data: CreateUserData) {
       .returning(['id', 'email', 'username', 'created_at', 'updated_at'])
       .executeTakeFirstOrThrow();
 
-    // Add user to default workspace as a member
-    const now = new Date().toISOString();
-    await trx
-      .insertInto('workspace_members')
-      .values({
-        workspace_id: defaultConfig.DEFAULT_WORKSPACE_ID!,
-        user_id: user.id,
-        role: 'member',
-        joined_at: now,
-      })
-      .execute();
+    // If default workspace is configured, add user to it
+    if (defaultConfig.DEFAULT_WORKSPACE_ID) {
+      const now = new Date().toISOString();
+      await trx
+        .insertInto('workspace_members')
+        .values({
+          workspace_id: defaultConfig.DEFAULT_WORKSPACE_ID,
+          user_id: user.id,
+          role: 'member',
+          joined_at: now,
+        })
+        .execute();
 
-    // Add user to default channel
-    await trx
-      .insertInto('channel_members')
-      .values({
-        channel_id: defaultConfig.DEFAULT_CHANNEL_ID!,
-        user_id: user.id,
-        joined_at: now,
-      })
-      .execute();
+      // If default channel is configured and in the default workspace, add user to it
+      if (defaultConfig.DEFAULT_CHANNEL_ID) {
+        // Verify the channel exists and belongs to the default workspace
+        const channel = await trx
+          .selectFrom('channels')
+          .where('id', '=', defaultConfig.DEFAULT_CHANNEL_ID)
+          .where('workspace_id', '=', defaultConfig.DEFAULT_WORKSPACE_ID)
+          .where('deleted_at', 'is', null)
+          .selectAll()
+          .executeTakeFirst();
+
+        if (channel) {
+          await trx
+            .insertInto('channel_members')
+            .values({
+              channel_id: defaultConfig.DEFAULT_CHANNEL_ID,
+              user_id: user.id,
+              joined_at: now,
+            })
+            .execute();
+        }
+      }
+    }
 
     return user;
   });
