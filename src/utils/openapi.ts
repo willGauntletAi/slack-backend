@@ -26,6 +26,10 @@ export function generateOpenApiDocument(): OpenAPIObject {
         url: 'http://localhost:3000',
         description: 'Local development server',
       },
+      {
+        url: 'http://3.139.67.107',
+        description: 'Production server',
+      },
     ],
     tags: [
       {
