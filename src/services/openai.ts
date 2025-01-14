@@ -6,11 +6,14 @@ export async function createMessageEmbedding(params: {
   embedding: number[];
   model: string;
 }): Promise<void> {
+  // Format the embedding array as a PostgreSQL vector string
+  const vectorStr = `[${params.embedding.join(',')}]`;
+  
   await db
     .insertInto('message_embeddings')
     .values({
       message_id: params.messageId,
-      embedding: sql`${params.embedding}::vector`,
+      embedding: sql`${vectorStr}::vector`,
       model: params.model,
     })
     .execute();

@@ -135,4 +135,34 @@ export async function searchMessages(userId: string, options: SearchOptions): Pr
         nextId,
         totalCount
     };
+}
+
+export async function semanticSearch(embedding: number[], limit: number = 10): Promise<Array<{
+    id: string;
+    content: string;
+    score: number;
+    channelId: string;
+    userId: string;
+    username: string;
+    createdAt: Date;
+    updatedAt: Date;
+}>> {
+    return db
+        .selectFrom('messages as m')
+        .innerJoin('message_embeddings as me', 'me.message_id', 'm.id')
+        .innerJoin('users as u', 'u.id', 'm.user_id')
+        .where('m.deleted_at', 'is', null)
+        .select(eb => [
+            'm.id',
+            'm.content',
+            'm.channel_id as channelId',
+            'm.user_id as userId',
+            'u.username',
+            'm.created_at as createdAt',
+            'm.updated_at as updatedAt',
+            sql<number>`1 - (me.embedding <=> ${sql.raw(`'[${embedding.join(',')}]'::vector`)})`.as('score')
+        ])
+        .orderBy('score', 'desc')
+        .limit(limit)
+        .execute();
 } 

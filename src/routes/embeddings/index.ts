@@ -3,9 +3,10 @@ import { RequestHandler } from 'express';
 import { authenticate, AuthRequest } from '../../middleware/auth';
 import { registry } from '../../utils/openapi';
 import OpenAI from 'openai';
-import { GenerateEmbeddingsResponseSchema, ErrorResponseSchema } from './types';
+import { GenerateEmbeddingsResponseSchema, ErrorResponseSchema, SemanticSearchResponseSchema, SemanticSearchRequestSchema } from './types';
 import { getMessagesWithoutEmbeddings } from '../../db/messages';
 import { createMessageEmbedding } from '../../services/openai';
+import { semanticSearch } from '../../db/search';
 const router = Router();
 
 if (!process.env.OPENAI_API_KEY) {
@@ -93,5 +94,90 @@ const generateAllEmbeddingsHandler: RequestHandler = async (req: AuthRequest, re
 };
 
 router.post('/all', authenticate, generateAllEmbeddingsHandler);
+
+// GET /embeddings - Semantic search using embeddings
+registry.registerPath({
+  method: 'get',
+  path: '/embeddings',
+  tags: ['embeddings'],
+  summary: 'Search messages using semantic embeddings',
+  security: [{ bearerAuth: [] }],
+  parameters: [
+    {
+      name: 'query',
+      in: 'query',
+      required: true,
+      schema: { type: 'string', minLength: 1, maxLength: 1000 },
+      description: 'Text to find semantically similar messages to',
+    },
+    {
+      name: 'limit',
+      in: 'query',
+      required: false,
+      schema: { type: 'number', minimum: 1, maximum: 10, default: 10 },
+      description: 'Number of results to return',
+    },
+  ],
+  responses: {
+    200: {
+      description: 'Successfully found similar messages',
+      content: {
+        'application/json': {
+          schema: SemanticSearchResponseSchema,
+        },
+      },
+    },
+    400: {
+      description: 'Error performing semantic search',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
+const semanticSearchHandler: RequestHandler = async (req: AuthRequest, res) => {
+  try {
+    if (!req.user?.id) {
+      res.status(401).json({ error: 'Not authenticated' });
+      return;
+    }
+
+    const params = SemanticSearchRequestSchema.parse({
+      query: String(req.query.query),
+      limit: req.query.limit ? parseInt(String(req.query.limit), 10) : undefined,
+    });
+
+    // Generate embedding for the query
+    const response = await openai.embeddings.create({
+      input: params.query,
+      model: "text-embedding-3-large",
+      dimensions: 2000,
+    });
+
+    const embedding = response.data[0].embedding;
+
+    // Search for similar messages
+    const messages = await semanticSearch(embedding, params.limit);
+
+    res.json({
+      messages: messages.map(msg => ({
+        ...msg,
+        id: String(msg.id),
+        createdAt: msg.createdAt.toISOString(),
+        updatedAt: msg.updatedAt.toISOString(),
+      })),
+    });
+  } catch (error) {
+    console.error('Error performing semantic search:', error);
+    res.status(400).json({
+      error: error instanceof Error ? error.message : 'Unknown error occurred',
+    });
+  }
+};
+
+router.get('/', authenticate, semanticSearchHandler);
 
 export default router; 
