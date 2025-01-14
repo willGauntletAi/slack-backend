@@ -242,6 +242,15 @@ registry.registerPath({
   tags: ['channels'],
   summary: 'List channels for the current user',
   security: [{ bearerAuth: [] }],
+  parameters: [
+    {
+      name: 'workspace_id',
+      in: 'query',
+      required: false,
+      schema: { type: 'string' },
+      description: 'Filter channels by workspace ID',
+    },
+  ],
   responses: {
     '200': {
       description: 'List of channels retrieved successfully',
@@ -269,7 +278,8 @@ const listUserChannelsHandler: RequestHandler<{}, ListUserChannelsResponse | Err
       return;
     }
 
-    const channels = await listUserChannels(req.user.id);
+    const workspaceId = typeof req.query.workspace_id === 'string' ? req.query.workspace_id : undefined;
+    const channels = await listUserChannels(req.user.id, workspaceId);
     const response: ListUserChannelsResponse = channels.map(channel => ({
       id: channel.id,
       name: channel.name,
