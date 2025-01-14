@@ -69,4 +69,31 @@ export interface SearchResponse {
     nextId: string | null;
     // Total count of results (across all pages)
     totalCount: number;
-} 
+}
+
+export const AskAiRequestSchema = z.object({
+    query: z.string().min(1).max(500),
+    workspaceId: z.string(),
+    channelId: z.string().optional(),
+    limit: z.number().min(1).max(20).optional().default(5),
+});
+
+export const AskAiMessageSchema = z.object({
+    id: z.string(),
+    content: z.string(),
+    userId: z.string(),
+    username: z.string(),
+    channelId: z.string(),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+    similarity: z.number()
+});
+
+export const AskAiResponseSchema = z.object({
+    answer: z.string(),
+    relevantMessages: z.array(AskAiMessageSchema)
+});
+
+export type AskAiRequest = z.infer<typeof AskAiRequestSchema>;
+export type AskAiMessage = z.infer<typeof AskAiMessageSchema>;
+export type AskAiResponse = z.infer<typeof AskAiResponseSchema>; 
