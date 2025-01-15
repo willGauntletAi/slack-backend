@@ -9,6 +9,7 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
+  REPO_LOWERCASE: ${{ lower(github.repository) }}
 
 jobs:
   deploy:
@@ -32,7 +33,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          images: ${{ env.REGISTRY }}/${{ env.REPO_LOWERCASE }}
           tags: |
             type=sha,format=short
 
@@ -68,7 +69,7 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          envs: REGISTRY,IMAGE_NAME
+          envs: REGISTRY,REPO_LOWERCASE
           script: |
             cd /home/ec2-user/slack-backend
             
@@ -80,7 +81,7 @@ jobs:
             
             # Deploy with environment variables
             REGISTRY="${{ env.REGISTRY }}" \
-            GITHUB_REPOSITORY="${{ github.repository }}" \
+            GITHUB_REPOSITORY="${{ env.REPO_LOWERCASE }}" \
             TAG="$SHA" \
             DATABASE_URL="${{ secrets.DATABASE_URL }}" \
             REDIS_URL="${{ secrets.REDIS_URL }}" \
