@@ -92,5 +92,5 @@ jobs:
             OPENAI_API_KEY="${{ secrets.OPENAI_API_KEY }}" \
             DEFAULT_WORKSPACE_ID="${{ secrets.DEFAULT_WORKSPACE_ID }}" \
             DEFAULT_CHANNEL_ID="${{ secrets.DEFAULT_CHANNEL_ID }}" \
-            sudo -E docker-compose pull && \
-            sudo -E docker-compose up -d 
+            sudo -E docker-compose --env-file /dev/null pull && \
+            sudo -E docker-compose --env-file /dev/null up -d 
