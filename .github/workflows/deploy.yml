@@ -24,8 +24,14 @@ jobs:
       - name: Set lowercase repository name
         run: |
           REPO_LOWERCASE=$(echo ${{ github.repository }} | tr '[:upper:]' '[:lower:]')
+          echo "Original repo: ${{ github.repository }}"
+          echo "Lowercase repo: $REPO_LOWERCASE"
           echo "REPO_LOWERCASE=$REPO_LOWERCASE" >> $GITHUB_ENV
-          echo "Set REPO_LOWERCASE to: $REPO_LOWERCASE"
+
+      - name: Debug environment
+        run: |
+          echo "REPO_LOWERCASE: ${{ env.REPO_LOWERCASE }}"
+          echo "Full image name will be: ${{ env.REGISTRY }}/${{ env.REPO_LOWERCASE }}"
 
       - name: Log in to the Container registry
         uses: docker/login-action@v3
@@ -77,14 +83,20 @@ jobs:
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
           envs: REGISTRY,REPO_NAME
+          debug: true
           script: |
             cd /home/ec2-user/slack-backend
+            
+            # Debug info
+            echo "Using registry: $REGISTRY"
+            echo "Using repository: $REPO_NAME"
             
             # Login to GitHub Container Registry
             sudo docker login ${{ env.REGISTRY }} -u ${{ github.actor }} -p ${{ secrets.GITHUB_TOKEN }}
             
             # Get just the short SHA
             SHA=$(echo "${{ steps.meta.outputs.tags }}" | grep -o 'sha-[a-f0-9]*' | head -n1)
+            echo "Using SHA: $SHA"
             
             # Deploy with environment variables
             REGISTRY="${{ env.REGISTRY }}" \
