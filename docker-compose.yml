@@ -24,7 +24,7 @@ services:
       - "6379:6379"
 
   server:
-    image: ${IMAGE_TAG}
+    image: ${REGISTRY}/${GITHUB_REPOSITORY}:${TAG}
     ports:
       - "80:80"
     environment:

@@ -68,14 +68,20 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
+          envs: REGISTRY,IMAGE_NAME
           script: |
             cd /home/ec2-user/slack-backend
             
             # Login to GitHub Container Registry
             sudo docker login ${{ env.REGISTRY }} -u ${{ github.actor }} -p ${{ secrets.GITHUB_TOKEN }}
             
+            # Get just the short SHA
+            SHA=$(echo "${{ steps.meta.outputs.tags }}" | grep -o 'sha-[a-f0-9]*' | head -n1)
+            
             # Deploy with environment variables
-            IMAGE_TAG="${{ steps.meta.outputs.tags }}" \
+            REGISTRY="${{ env.REGISTRY }}" \
+            GITHUB_REPOSITORY="${{ github.repository }}" \
+            TAG="$SHA" \
             DATABASE_URL="${{ secrets.DATABASE_URL }}" \
             REDIS_URL="${{ secrets.REDIS_URL }}" \
             JWT_SECRET="${{ secrets.JWT_SECRET }}" \
