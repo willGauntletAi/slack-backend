@@ -100,7 +100,7 @@ jobs:
             
             # Deploy with environment variables
             REGISTRY="${{ env.REGISTRY }}" \
-            GITHUB_REPOSITORY="${REPO_NAME}" \
+            GITHUB_REPOSITORY="${{ env.REPO_LOWERCASE }}" \
             TAG="$SHA" \
             DATABASE_URL="${{ secrets.DATABASE_URL }}" \
             REDIS_URL="${{ secrets.REDIS_URL }}" \
