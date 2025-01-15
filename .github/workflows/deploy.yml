@@ -33,6 +33,10 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha,format=long
+            type=ref,event=branch
+            type=ref,event=tag
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
@@ -69,6 +73,9 @@ jobs:
           script: |
             cd /home/ec2-user/slack-backend
             cat > .env << EOL
+            REGISTRY=${{ env.REGISTRY }}
+            GITHUB_REPOSITORY=${{ github.repository }}
+            TAG=${{ steps.meta.outputs.tags }}
             DATABASE_URL=${{ secrets.DATABASE_URL }}
             REDIS_URL=${{ secrets.REDIS_URL }}
             PORT=80
@@ -93,5 +100,7 @@ jobs:
           script: |
             cd /home/ec2-user/slack-backend
             sudo docker login ${{ env.REGISTRY }} -u ${{ github.actor }} -p ${{ secrets.GITHUB_TOKEN }}
-            sudo docker-compose pull
-            sudo docker-compose up -d 
+            IMAGE_TAG=$(echo "${{ steps.meta.outputs.tags }}" | head -n 1)
+            echo "Using image tag: $IMAGE_TAG"
+            sudo REGISTRY=${{ env.REGISTRY }} GITHUB_REPOSITORY=${{ github.repository }} TAG=$IMAGE_TAG docker-compose pull
+            sudo REGISTRY=${{ env.REGISTRY }} GITHUB_REPOSITORY=${{ github.repository }} TAG=$IMAGE_TAG docker-compose up -d 

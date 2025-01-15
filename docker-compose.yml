@@ -1,4 +1,3 @@
-version: "3.8"
 services:
   postgres:
     image: pgvector/pgvector:pg16
@@ -25,7 +24,7 @@ services:
       - "6379:6379"
 
   server:
-    image: ${REGISTRY:-ghcr.io}/${GITHUB_REPOSITORY:-your-username/slack-backend}:${TAG:-latest}
+    image: ${REGISTRY}/${GITHUB_REPOSITORY}:${TAG}
     ports:
       - "80:80"
     environment:
