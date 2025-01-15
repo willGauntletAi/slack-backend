@@ -88,19 +88,19 @@ jobs:
             cd /home/ec2-user/slack-backend
             
             # Debug info
-            echo "Using registry: $REGISTRY"
-            echo "Using repository: $REPO_NAME"
+            echo 'Registry value is: '"$REGISTRY"
+            echo 'Repository value is: '"$REPO_NAME"
             
             # Login to GitHub Container Registry
             sudo docker login ${{ env.REGISTRY }} -u ${{ github.actor }} -p ${{ secrets.GITHUB_TOKEN }}
             
-            # Get just the short SHA
+            # Get just the short SHA and debug it
             SHA=$(echo "${{ steps.meta.outputs.tags }}" | grep -o 'sha-[a-f0-9]*' | head -n1)
-            echo "Using SHA: $SHA"
+            echo 'SHA value is: '"$SHA"
             
             # Deploy with environment variables
-            REGISTRY="${{ env.REGISTRY }}" \
-            GITHUB_REPOSITORY="${{ env.REPO_LOWERCASE }}" \
+            REGISTRY="$REGISTRY" \
+            GITHUB_REPOSITORY="$REPO_NAME" \
             TAG="$SHA" \
             DATABASE_URL="${{ secrets.DATABASE_URL }}" \
             REDIS_URL="${{ secrets.REDIS_URL }}" \
