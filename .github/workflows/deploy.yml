@@ -98,19 +98,26 @@ jobs:
             SHA=$(echo "${{ steps.meta.outputs.tags }}" | grep -o 'sha-[a-f0-9]*' | head -n1)
             echo 'SHA value is: '"$SHA"
             
-            # Deploy with environment variables
-            REGISTRY="$REGISTRY" \
-            GITHUB_REPOSITORY="$REPO_NAME" \
-            TAG="$SHA" \
-            DATABASE_URL="${{ secrets.DATABASE_URL }}" \
-            REDIS_URL="${{ secrets.REDIS_URL }}" \
-            JWT_SECRET="${{ secrets.JWT_SECRET }}" \
-            SLACK_AWS_REGION="${{ secrets.SLACK_AWS_REGION }}" \
-            SLACK_AWS_ACCESS_KEY_ID="${{ secrets.SLACK_AWS_ACCESS_KEY_ID }}" \
-            SLACK_AWS_SECRET_ACCESS_KEY="${{ secrets.SLACK_AWS_SECRET_ACCESS_KEY }}" \
-            SLACK_AWS_S3_BUCKET="${{ secrets.SLACK_AWS_S3_BUCKET }}" \
-            OPENAI_API_KEY="${{ secrets.OPENAI_API_KEY }}" \
-            DEFAULT_WORKSPACE_ID="${{ secrets.DEFAULT_WORKSPACE_ID }}" \
-            DEFAULT_CHANNEL_ID="${{ secrets.DEFAULT_CHANNEL_ID }}" \
-            sudo -E docker-compose --env-file /dev/null pull && \
-            sudo -E docker-compose --env-file /dev/null up -d 
+            # Create temporary env file
+            cat > .env.tmp << EOL
+            REGISTRY=$REGISTRY
+            GITHUB_REPOSITORY=$REPO_NAME
+            TAG=$SHA
+            DATABASE_URL=${{ secrets.DATABASE_URL }}
+            REDIS_URL=${{ secrets.REDIS_URL }}
+            JWT_SECRET=${{ secrets.JWT_SECRET }}
+            SLACK_AWS_REGION=${{ secrets.SLACK_AWS_REGION }}
+            SLACK_AWS_ACCESS_KEY_ID=${{ secrets.SLACK_AWS_ACCESS_KEY_ID }}
+            SLACK_AWS_SECRET_ACCESS_KEY=${{ secrets.SLACK_AWS_SECRET_ACCESS_KEY }}
+            SLACK_AWS_S3_BUCKET=${{ secrets.SLACK_AWS_S3_BUCKET }}
+            OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
+            DEFAULT_WORKSPACE_ID=${{ secrets.DEFAULT_WORKSPACE_ID }}
+            DEFAULT_CHANNEL_ID=${{ secrets.DEFAULT_CHANNEL_ID }}
+            EOL
+            
+            # Deploy using the temporary env file
+            sudo docker-compose --env-file .env.tmp pull && \
+            sudo docker-compose --env-file .env.tmp up -d
+            
+            # Clean up
+            rm .env.tmp
