@@ -23,7 +23,9 @@ jobs:
 
       - name: Set lowercase repository name
         run: |
-          echo "REPO_LOWERCASE=$(echo ${{ github.repository }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+          REPO_LOWERCASE=$(echo ${{ github.repository }} | tr '[:upper:]' '[:lower:]')
+          echo "REPO_LOWERCASE=$REPO_LOWERCASE" >> $GITHUB_ENV
+          echo "Set REPO_LOWERCASE to: $REPO_LOWERCASE"
 
       - name: Log in to the Container registry
         uses: docker/login-action@v3
@@ -68,11 +70,13 @@ jobs:
 
       - name: Deploy
         uses: appleboy/ssh-action@master
+        env:
+          REPO_NAME: ${{ env.REPO_LOWERCASE }}
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          envs: REGISTRY,REPO_LOWERCASE
+          envs: REGISTRY,REPO_NAME
           script: |
             cd /home/ec2-user/slack-backend
             
@@ -84,7 +88,7 @@ jobs:
             
             # Deploy with environment variables
             REGISTRY="${{ env.REGISTRY }}" \
-            GITHUB_REPOSITORY="${{ env.REPO_LOWERCASE }}" \
+            GITHUB_REPOSITORY="${REPO_NAME}" \
             TAG="$SHA" \
             DATABASE_URL="${{ secrets.DATABASE_URL }}" \
             REDIS_URL="${{ secrets.REDIS_URL }}" \
