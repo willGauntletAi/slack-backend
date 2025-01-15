@@ -34,9 +34,7 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=sha,format=long
-            type=ref,event=branch
-            type=ref,event=tag
+            type=sha,format=short
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
@@ -64,7 +62,7 @@ jobs:
           source: "docker-compose.yml"
           target: "/home/ec2-user/slack-backend"
 
-      - name: Create env file
+      - name: Deploy
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -72,35 +70,21 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             cd /home/ec2-user/slack-backend
-            cat > .env << EOL
-            REGISTRY=${{ env.REGISTRY }}
-            GITHUB_REPOSITORY=${{ github.repository }}
-            TAG=${{ steps.meta.outputs.tags }}
-            DATABASE_URL=${{ secrets.DATABASE_URL }}
-            REDIS_URL=${{ secrets.REDIS_URL }}
-            PORT=80
-            JWT_SECRET=${{ secrets.JWT_SECRET }}
-            JWT_ACCESS_EXPIRATION=15m
-            JWT_REFRESH_EXPIRATION=7d
-            SLACK_AWS_REGION=${{ secrets.SLACK_AWS_REGION }}
-            SLACK_AWS_ACCESS_KEY_ID=${{ secrets.SLACK_AWS_ACCESS_KEY_ID }}
-            SLACK_AWS_SECRET_ACCESS_KEY=${{ secrets.SLACK_AWS_SECRET_ACCESS_KEY }}
-            SLACK_AWS_S3_BUCKET=${{ secrets.SLACK_AWS_S3_BUCKET }}
-            OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
-            DEFAULT_WORKSPACE_ID=${{ secrets.DEFAULT_WORKSPACE_ID }}
-            DEFAULT_CHANNEL_ID=${{ secrets.DEFAULT_CHANNEL_ID }}
-            EOL
-
-      - name: Deploy to EC2
-        uses: appleboy/ssh-action@master
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USERNAME }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          script: |
-            cd /home/ec2-user/slack-backend
+            
+            # Login to GitHub Container Registry
             sudo docker login ${{ env.REGISTRY }} -u ${{ github.actor }} -p ${{ secrets.GITHUB_TOKEN }}
-            IMAGE_TAG=$(echo "${{ steps.meta.outputs.tags }}" | head -n 1)
-            echo "Using image tag: $IMAGE_TAG"
-            sudo REGISTRY=${{ env.REGISTRY }} GITHUB_REPOSITORY=${{ github.repository }} TAG=$IMAGE_TAG docker-compose pull
-            sudo REGISTRY=${{ env.REGISTRY }} GITHUB_REPOSITORY=${{ github.repository }} TAG=$IMAGE_TAG docker-compose up -d 
+            
+            # Deploy with environment variables
+            IMAGE_TAG="${{ steps.meta.outputs.tags }}" \
+            DATABASE_URL="${{ secrets.DATABASE_URL }}" \
+            REDIS_URL="${{ secrets.REDIS_URL }}" \
+            JWT_SECRET="${{ secrets.JWT_SECRET }}" \
+            SLACK_AWS_REGION="${{ secrets.SLACK_AWS_REGION }}" \
+            SLACK_AWS_ACCESS_KEY_ID="${{ secrets.SLACK_AWS_ACCESS_KEY_ID }}" \
+            SLACK_AWS_SECRET_ACCESS_KEY="${{ secrets.SLACK_AWS_SECRET_ACCESS_KEY }}" \
+            SLACK_AWS_S3_BUCKET="${{ secrets.SLACK_AWS_S3_BUCKET }}" \
+            OPENAI_API_KEY="${{ secrets.OPENAI_API_KEY }}" \
+            DEFAULT_WORKSPACE_ID="${{ secrets.DEFAULT_WORKSPACE_ID }}" \
+            DEFAULT_CHANNEL_ID="${{ secrets.DEFAULT_CHANNEL_ID }}" \
+            sudo -E docker-compose pull && \
+            sudo -E docker-compose up -d 
