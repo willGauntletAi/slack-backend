@@ -12,6 +12,7 @@ export const createMessageRequestSchema = z.object({
     content: z.string(),
     parent_id: z.string().optional(),
     attachments: z.array(FileAttachmentSchema).default([]),
+    request_avatar: z.string().uuid().optional(),
 });
 
 export const createMessageReactionRequestSchema = z.object({

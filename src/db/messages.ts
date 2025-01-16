@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { isChannelMember } from './channels';
 import { publishNewMessage } from '../services/redis';
 import { jsonArrayFrom } from 'kysely/helpers/postgres';
+import { generateAvatarResponse } from '../services/openai';
 
 
 // Schema for creating a message
@@ -368,4 +369,44 @@ export async function getMessagesWithoutEmbeddings(): Promise<MessageForEmbeddin
     .where('messages.content', 'is not', null)
     .where('messages.deleted_at', 'is', null)
     .execute();
+}
+
+// Create a message from the AI avatar
+export async function createAvatarMessage(params: {
+  channelId: string;
+  workspaceId: string;
+  userId: string;
+}) {
+  // Check if user is a member of the channel
+  const isMember = await isChannelMember(params.channelId, params.userId);
+  if (!isMember) {
+    throw new Error('Not a member of this channel');
+  }
+
+  // Get channel and workspace names
+  const channelAndWorkspace = await db
+    .selectFrom('channels as c')
+    .innerJoin('workspaces as w', 'w.id', 'c.workspace_id')
+    .where('c.id', '=', params.channelId)
+    .where('w.id', '=', params.workspaceId)
+    .select(['c.name as channelName', 'w.name as workspaceName'])
+    .executeTakeFirst();
+
+  if (!channelAndWorkspace) {
+    throw new Error('Channel or workspace not found');
+  }
+
+  // Generate the AI response
+  const content = await generateAvatarResponse({
+    channelName: channelAndWorkspace.channelName,
+    workspaceName: channelAndWorkspace.workspaceName,
+    messages: []
+  });
+
+  // Create the message with is_avatar flag
+  return createMessage(params.channelId, params.userId, {
+    content,
+    is_avatar: true,
+    attachments: []
+  });
 }
