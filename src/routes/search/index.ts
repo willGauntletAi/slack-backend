@@ -9,10 +9,10 @@ import {
     AskAiResponseSchema,
     AskAiRequestSchema
 } from './types';
-import { ErrorResponse, ErrorResponseSchema } from '../channels/types';
+import { ErrorResponseSchema } from '../channels/types';
 import { searchMessages } from '../../db/search';
 import { openai } from '../../services/openai';
-import { SearchResult, semanticSearch } from '../../utils/semanticSearch';
+import { semanticSearch } from '../../utils/semanticSearch';
 
 const router = Router();
 
@@ -283,7 +283,8 @@ const askAiHandler: RequestHandler = async (req: AuthRequest, res) => {
                 username: msg.username,
                 channelId: msg.channelId,
                 updatedAt: msg.updatedAt.toISOString(),
-                similarity: msg.similarity
+                similarity: msg.similarity,
+                is_avatar: msg.is_avatar
             }))
         };
 

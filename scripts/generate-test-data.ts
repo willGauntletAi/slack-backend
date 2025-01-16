@@ -40,6 +40,7 @@ async function generateMessage(username: string, channelId: string, userId: stri
   
   return await createMessage(channelId, userId, {
     content: content.replace(/["']/g, ''),
+    is_avatar: false,
     attachments: []
   });
 }

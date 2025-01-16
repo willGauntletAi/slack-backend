@@ -2,14 +2,6 @@ import { db } from '../db';
 import { sql } from 'kysely';
 import { Messages } from '../db/types';
 
-export interface SearchResult extends Pick<Messages, 'id' | 'content' | 'user_id' | 'created_at' | 'updated_at'> {
-    similarity: number;
-    userId: string;
-    username: string;
-    createdAt: Date;
-    updatedAt: Date;
-    channelId: string;
-}
 
 export async function semanticSearch(
     embedding: number[], 
@@ -17,7 +9,7 @@ export async function semanticSearch(
     workspaceId: string,
     limit: number = 5, 
     channelId?: string
-): Promise<SearchResult[]> {
+) {
     const similarityScore = sql<number>`1 - (me.embedding <=> ${JSON.stringify(embedding)}::vector)`;
     
     const query = db
@@ -71,5 +63,5 @@ export async function semanticSearch(
         .limit(limit)
         .execute();
 
-    return results as unknown as SearchResult[];
+    return results;
 } 
