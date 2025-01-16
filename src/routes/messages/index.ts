@@ -219,6 +219,7 @@ const listMessagesHandler: RequestHandler<
       created_at: msg.created_at.toISOString(),
       updated_at: msg.updated_at.toISOString(),
       parent_id: msg.parent_id?.toString() || null,
+      is_avatar: msg.is_avatar,
       reactions: msg.reactions.map(reaction => ({
         ...reaction,
         message_id: reaction.message_id.toString(),

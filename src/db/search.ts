@@ -97,6 +97,7 @@ export async function searchMessages(userId: string, options: SearchOptions): Pr
             'u.username',
             'm.created_at as createdAt',
             'm.updated_at as updatedAt',
+            'm.is_avatar',
             sql<string>`ts_headline('english', m.content, to_tsquery('english', ${formattedQuery}))`.as('matchContext'),
             jsonArrayFrom(
                 eb.selectFrom('message_attachments as ma')
@@ -123,6 +124,7 @@ export async function searchMessages(userId: string, options: SearchOptions): Pr
         messages: messages.map(msg => ({
             ...msg,
             id: String(msg.id) as unknown as Int8,
+            is_avatar: msg.is_avatar,
             // For messages that matched due to attachment, highlight the matching attachment filename
             matchContext: msg.matchContext || (msg.attachments.find(a => a.matches_search)
                 ? `Matching attachment: ${msg.attachments.find(a => a.matches_search)?.filename}`

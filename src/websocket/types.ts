@@ -50,6 +50,7 @@ export const newMessageSchema = z.object({
     updated_at: z.string(),
     user_id: z.string().uuid(),
     username: z.string(),
+    is_avatar: z.boolean(),
     attachments: z.array(z.object({
       id: z.string(),
       file_key: z.string(),

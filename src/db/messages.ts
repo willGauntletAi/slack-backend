@@ -3,12 +3,13 @@ import { z } from 'zod';
 import { isChannelMember } from './channels';
 import { publishNewMessage } from '../services/redis';
 import { jsonArrayFrom } from 'kysely/helpers/postgres';
-import { sql } from 'kysely';
+
 
 // Schema for creating a message
 export const createMessageSchema = z.object({
   content: z.string(),
   parent_id: z.string().optional(),
+  is_avatar: z.boolean().default(false),
   attachments: z.array(z.object({
     file_key: z.string(),
     filename: z.string(),
@@ -52,6 +53,7 @@ export async function createMessage(channelId: string, userId: string, data: Cre
         user_id: userId,
         content: data.content,
         parent_id: data.parent_id ? BigInt(data.parent_id) : null,
+        is_avatar: data.is_avatar,
         created_at: now,
         updated_at: now,
       })
@@ -143,6 +145,7 @@ export async function listChannelMessages(
       'm.updated_at',
       'm.user_id',
       'm.channel_id',
+      'm.is_avatar',
       'u.username',
       jsonArrayFrom(
         eb.selectFrom('message_reactions as mr')

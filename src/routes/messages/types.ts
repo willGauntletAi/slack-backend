@@ -19,6 +19,7 @@ export const CreateMessageResponseSchema = z.object({
     updated_at: z.string(),
     user_id: z.string(),
     channel_id: z.string(),
+    is_avatar: z.boolean(),
     attachments: z.array(FileAttachmentSchema),
 });
 
@@ -39,6 +40,7 @@ export const ListMessagesResponseSchema = z.array(z.object({
     user_id: z.string(),
     username: z.string(),
     channel_id: z.string(),
+    is_avatar: z.boolean(),
     reactions: z.array(MessageReactionSchema),
     attachments: z.array(FileAttachmentSchema),
 }));

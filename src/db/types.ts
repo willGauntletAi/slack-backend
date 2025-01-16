@@ -64,6 +64,7 @@ export interface Messages {
   created_at: Generated<Timestamp>;
   deleted_at: Timestamp | null;
   id: Generated<Int8>;
+  is_avatar: Generated<boolean>;
   parent_id: Int8 | null;
   updated_at: Generated<Timestamp>;
   user_id: string;

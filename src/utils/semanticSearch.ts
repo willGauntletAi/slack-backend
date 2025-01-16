@@ -43,6 +43,7 @@ export async function semanticSearch(
             'm.channel_id as channelId',
             'm.created_at as createdAt',
             'm.updated_at as updatedAt',
+            'm.is_avatar',
             similarityScore.as('similarity')
         ])
         .where('m.deleted_at', 'is', null)

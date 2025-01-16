@@ -236,6 +236,7 @@ interface RedisMessageEvent {
     updated_at: string;
     user_id: string;
     username: string;
+    is_avatar: boolean;
     attachments: Array<{
       id: string;
       file_key: string;

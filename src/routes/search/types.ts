@@ -18,6 +18,7 @@ export const SearchMessageSchema = z.object({
     username: z.string(),
     createdAt: z.string(),
     updatedAt: z.string(),
+    is_avatar: z.boolean(),
     matchContext: z.string(),
     attachments: z.array(SearchAttachmentSchema),
 });
@@ -57,6 +58,7 @@ export interface SearchMessage {
     username: string;
     createdAt: Date;
     updatedAt: Date;
+    is_avatar: boolean;
     // Snippet of text showing the match context
     matchContext: string;
     // Nested attachments that matched the search (if any)
@@ -86,6 +88,7 @@ export const AskAiMessageSchema = z.object({
     channelId: z.string(),
     createdAt: z.string(),
     updatedAt: z.string(),
+    is_avatar: z.boolean(),
     similarity: z.number()
 });
 
