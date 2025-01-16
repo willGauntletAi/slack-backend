@@ -1,6 +1,4 @@
 import { z } from 'zod';
-import { createMessageSchema, updateMessageSchema } from '../../db/messages';
-import { createMessageReactionSchema } from '../../db/message-reactions';
 
 // Request schemas
 export const FileAttachmentSchema = z.object({
@@ -10,6 +8,25 @@ export const FileAttachmentSchema = z.object({
     size: z.number(),
 });
 
+export const createMessageRequestSchema = z.object({
+    content: z.string(),
+    parent_id: z.string().optional(),
+    attachments: z.array(FileAttachmentSchema).default([]),
+});
+
+export const createMessageReactionRequestSchema = z.object({
+    emoji: z.string().min(1),
+});
+
+export const updateMessageRequestSchema = z.object({
+  content: z.string().min(1),
+  attachments: z.array(z.object({
+    file_key: z.string(),
+    filename: z.string(),
+    mime_type: z.string(),
+    size: z.number(),
+  })).default([]),
+});
 // Response schemas
 export const CreateMessageResponseSchema = z.object({
     id: z.string(),
@@ -57,7 +74,4 @@ export const CreateMessageReactionResponseSchema = z.object({
 
 export const ErrorResponseSchema = z.object({
     error: z.string(),
-});
-
-// Re-export the request schemas
-export { createMessageSchema, updateMessageSchema, createMessageReactionSchema }; 
+}); 

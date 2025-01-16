@@ -6,9 +6,9 @@ import { registry } from '../../utils/openapi';
 import { createMessage, listChannelMessages, updateMessage, deleteMessage } from '../../db/messages';
 import { addMessageReaction, deleteMessageReaction } from '../../db/message-reactions';
 import {
-  createMessageSchema,
-  updateMessageSchema,
-  createMessageReactionSchema,
+  createMessageRequestSchema,
+  updateMessageRequestSchema,
+  createMessageReactionRequestSchema,
   CreateMessageResponseSchema,
   ListMessagesResponseSchema,
   UpdateMessageResponseSchema,
@@ -39,7 +39,7 @@ registry.registerPath({
     body: {
       content: {
         'application/json': {
-          schema: createMessageSchema,
+          schema: createMessageRequestSchema,
         },
       },
     },
@@ -80,15 +80,15 @@ registry.registerPath({
   },
 });
 
-const createMessageHandler: RequestHandler<{ id: string }, {}, z.infer<typeof createMessageSchema>> = async (req: AuthRequest, res) => {
+const createMessageHandler: RequestHandler<{ id: string }, {}, z.infer<typeof createMessageRequestSchema>> = async (req: AuthRequest, res) => {
   try {
     if (!req.user?.id) {
       res.status(401).json({ error: 'Not authenticated' });
       return;
     }
 
-    const data = createMessageSchema.parse(req.body);
-    const message = await createMessage(req.params.id, req.user.id, data);
+    const data = createMessageRequestSchema.parse(req.body);
+    const message = await createMessage(req.params.id, req.user.id, {...data, is_avatar: false});
     res.status(201).json({
       ...message,
       created_at: message.created_at.toISOString(),
@@ -256,7 +256,7 @@ registry.registerPath({
     body: {
       content: {
         'application/json': {
-          schema: updateMessageSchema,
+          schema: updateMessageRequestSchema,
         },
       },
     },
@@ -305,14 +305,14 @@ registry.registerPath({
   },
 });
 
-const updateMessageHandler: RequestHandler<{ id: string }, {}, z.infer<typeof updateMessageSchema>> = async (req: AuthRequest, res) => {
+const updateMessageHandler: RequestHandler<{ id: string }, {}, z.infer<typeof updateMessageRequestSchema>> = async (req: AuthRequest, res) => {
   try {
     if (!req.user?.id) {
       res.status(401).json({ error: 'Not authenticated' });
       return;
     }
 
-    const data = updateMessageSchema.parse(req.body);
+    const data = updateMessageRequestSchema.parse(req.body);
     const message = await updateMessage(req.params.id, req.user.id, data);
     if (!message) {
       res.status(404).json({ error: 'Message not found' });
@@ -443,7 +443,7 @@ registry.registerPath({
     body: {
       content: {
         'application/json': {
-          schema: createMessageReactionSchema,
+          schema: createMessageReactionRequestSchema,
         },
       },
     },
@@ -492,14 +492,14 @@ registry.registerPath({
   },
 });
 
-const addReactionHandler: RequestHandler<{ id: string }, {}, z.infer<typeof createMessageReactionSchema>> = async (req: AuthRequest, res) => {
+const addReactionHandler: RequestHandler<{ id: string }, {}, z.infer<typeof createMessageReactionRequestSchema>> = async (req: AuthRequest, res) => {
   try {
     if (!req.user?.id) {
       res.status(401).json({ error: 'Not authenticated' });
       return;
     }
 
-    const data = createMessageReactionSchema.parse(req.body);
+    const data = createMessageReactionRequestSchema.parse(req.body);
     const reaction = await addMessageReaction(req.params.id, req.user.id, data);
     res.status(201).json(reaction);
   } catch (error) {
