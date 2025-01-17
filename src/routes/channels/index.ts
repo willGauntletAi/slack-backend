@@ -114,7 +114,7 @@ const createChannelHandler: RequestHandler<{ id: string }, CreateChannelResponse
       created_at: channel.created_at.toISOString(),
       updated_at: channel.updated_at.toISOString(),
       lastUpdated: new Date(channel.lastUpdated).toISOString(),
-      usernames: channel.usernames,
+      members: channel.members,
     };
     res.status(201).json(response);
   } catch (error) {
@@ -220,7 +220,7 @@ const listChannelsHandler: RequestHandler<{ id: string }, ListChannelsResponse |
       created_at: channel.created_at.toISOString(),
       updated_at: channel.updated_at.toISOString(),
       lastUpdated: new Date(channel.lastUpdated).toISOString(),
-      usernames: channel.members.map(member => member.username),
+      members: channel.members,
       unread_count: Number(channel.unread_count || 0),
       last_read_message: channel.last_read_message?.toString() ?? null,
     }));
@@ -289,7 +289,7 @@ const listUserChannelsHandler: RequestHandler<{}, ListUserChannelsResponse | Err
       lastUpdated: new Date(channel.lastUpdated).toISOString(),
       workspace_id: channel.workspace_id,
       workspace_name: channel.workspace_name,
-      usernames: channel.members.map(member => member.username),
+      members: channel.members,
       unread_count: Number(channel.unread_count || 0),
       last_read_message: channel.last_read_message?.toString() ?? null,
     }));
@@ -385,7 +385,7 @@ const updateChannelHandler: RequestHandler<{ id: string }, UpdateChannelResponse
       created_at: channel.created_at.toISOString(),
       updated_at: channel.updated_at.toISOString(),
       lastUpdated: new Date(channel.lastUpdated).toISOString(),
-      usernames: channel.usernames.map(username => username.username),
+      members: channel.members,
     };
     res.json(response);
   } catch (error) {

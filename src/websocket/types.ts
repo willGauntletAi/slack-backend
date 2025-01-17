@@ -74,6 +74,7 @@ export const channelJoinMessageSchema = z.object({
     created_at: z.string(),
     updated_at: z.string(),
     members: z.array(z.object({
+      id: z.string(),
       username: z.string()
     }))
   })

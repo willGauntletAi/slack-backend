@@ -20,7 +20,10 @@ export const ChannelSchema = z.object({
     created_at: z.string(),
     updated_at: z.string(),
     lastUpdated: z.string(),
-    usernames: z.array(z.string()),
+    members: z.array(z.object({
+        id: z.string(),
+        username: z.string()
+    })),
 });
 
 export const UserSchema = z.object({
@@ -38,7 +41,10 @@ export const ListChannelSchema = z.object({
     created_at: z.string(),
     updated_at: z.string(),
     lastUpdated: z.string(),
-    usernames: z.array(z.string()),
+    members: z.array(z.object({
+        id: z.string(),
+        username: z.string()
+    })),
     unread_count: z.number(),
     last_read_message: z.string().nullable(),
 });
@@ -52,7 +58,10 @@ export const UserChannelSchema = z.object({
     lastUpdated: z.string(),
     workspace_id: z.string(),
     workspace_name: z.string(),
-    usernames: z.array(z.string()),
+    members: z.array(z.object({
+        id: z.string(),
+        username: z.string()
+    })),
     unread_count: z.number(),
     last_read_message: z.string().nullable(),
 });

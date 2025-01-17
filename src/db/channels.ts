@@ -98,13 +98,12 @@ export async function createChannel(workspaceId: string, userId: string, data: C
     // Get member usernames
     const members = await trx
       .selectFrom('users')
-      .select(['username'])
+      .select(['id', 'username'])
       .where('id', 'in', memberIds)
       .execute();
 
     return {
       ...channel,
-      usernames: members.map(m => m.username),
       members,
       memberIds,
       lastUpdated: now,
@@ -128,7 +127,7 @@ export async function createChannel(workspaceId: string, userId: string, data: C
 
   return {
     ...result,
-    usernames: result.usernames,
+    members: result.members,
   };
 }
 
@@ -202,7 +201,8 @@ export async function listChannelsInWorkspace(
       jsonArrayFrom(
         eb.selectFrom('users')
           .select([
-            'username',
+            'id',
+            'username'
           ])
           .innerJoin('channel_members', join =>
             join
@@ -266,14 +266,17 @@ export async function updateChannel(channelId: string, userId: string, data: Upd
       getLastUpdatedExpression(eb, 'c.id', userId),
       jsonArrayFrom(
         eb.selectFrom('users')
-          .select(['username'])
+          .select([
+            'id',
+            'username'
+          ])
           .innerJoin('channel_members', join =>
             join
               .onRef('channel_members.user_id', '=', 'users.id')
               .onRef('channel_members.channel_id', '=', eb.ref('c.id'))
           )
           .where('channel_members.deleted_at', 'is', null)
-      ).as('usernames')
+      ).as('members')
     ])
     .executeTakeFirstOrThrow();
 
@@ -370,7 +373,10 @@ export async function addChannelMember(channelId: string, userId: string, addedB
       'c.updated_at',
       jsonArrayFrom(
         eb.selectFrom('users')
-          .select(['username'])
+          .select([
+            'id',
+            'username'
+          ])
           .innerJoin('channel_members', join =>
             join
               .onRef('channel_members.user_id', '=', 'users.id')

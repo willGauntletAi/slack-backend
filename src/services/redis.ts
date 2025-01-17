@@ -184,7 +184,7 @@ class RedisService {
     }
 
     console.log('Handling channel join event:', event);
-    this.wsHandler.broadcastToUsers(event.userIds, {
+    this.wsHandler.broadcastToChannel(event.channelId, {
       type: 'channel_join',
       channelId: event.channelId,
       channel: event.channel
@@ -285,6 +285,7 @@ interface RedisChannelJoinEvent {
     created_at: string;
     updated_at: string;
     members: Array<{
+      id: string;
       username: string;
     }>;
   };
