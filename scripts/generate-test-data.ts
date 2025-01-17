@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import { db } from '../src/db';
-import { createUser } from '../src/db/users';
+import { createUser, findUserByEmailOrUsername } from '../src/db/users';
 import { createWorkspace } from '../src/db/workspaces';
 import { createChannel } from '../src/db/channels';
 import { createMessage, listChannelMessages } from '../src/db/messages';
@@ -45,30 +45,15 @@ async function generateMessage(username: string, channelId: string, userId: stri
   });
 }
 
+
 async function main() {
   try {
-    // Create 4 users with predefined personalities
+    // get 4 users with predefined personalities
     const users = await Promise.all([
-      createUser({
-        email: 'user1@example.com',
-        username: 'techie_tom',
-        password_hash: 'dummy_hash'
-      }),
-      createUser({
-        email: 'user2@example.com',
-        username: 'creative_clara',
-        password_hash: 'dummy_hash'
-      }),
-      createUser({
-        email: 'user3@example.com',
-        username: 'analytical_alex',
-        password_hash: 'dummy_hash'
-      }),
-      createUser({
-        email: 'user4@example.com',
-        username: 'friendly_fiona',
-        password_hash: 'dummy_hash'
-      })
+      findUserByEmailOrUsername('user1@example.com', 'techie_tom'),
+      findUserByEmailOrUsername('user2@example.com', 'creative_clara'),
+      findUserByEmailOrUsername('user3@example.com', 'analytical_alex'),
+      findUserByEmailOrUsername('user4@example.com', 'friendly_fiona')
     ]);
 
     if (!users[0]) throw new Error('Failed to create first user');
