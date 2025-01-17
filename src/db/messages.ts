@@ -1,11 +1,12 @@
 import { db } from './index';
 import { z } from 'zod';
 import { isChannelMember } from './channels';
-import { publishNewMessage } from '../services/redis';
+import { publishNewMessage, publishTyping } from '../services/redis';
 import { jsonArrayFrom } from 'kysely/helpers/postgres';
 import { generateAvatarResponse, generateEmbedding } from '../services/openai';
 import { sql } from 'kysely';
 import { semanticSearch } from '../utils/semanticSearch';
+import { findUserById } from './users';
 
 
 // Schema for creating a message
@@ -483,102 +484,121 @@ export async function createAvatarMessage(params: {
     throw new Error('Not a member of this channel');
   }
 
-  // Get channel and workspace names
-  const channelAndWorkspace = await db
-    .selectFrom('channels as c')
-    .innerJoin('workspaces as w', 'w.id', 'c.workspace_id')
-    .where('c.id', '=', params.channelId)
-    .where('w.id', '=', params.workspaceId)
-    .select(['c.name as channelName', 'w.name as workspaceName'])
-    .executeTakeFirst();
-
-  if (!channelAndWorkspace) {
-    throw new Error('Channel or workspace not found');
+  // Get username once for typing indicators
+  const username = (await findUserById(params.userId))?.username;
+  if (!username) {
+    throw new Error('User not found');
   }
 
-  // Get the last 10 messages from the channel
-  const recentMessages = await db
-    .selectFrom('messages as m')
-    .innerJoin('users as u', 'u.id', 'm.user_id')
-    .where('m.channel_id', '=', params.channelId)
-    .where('m.deleted_at', 'is', null)
-    .where(eb => {
-      if (params.parent_id) {
-        // If parent_id provided, get messages with same parent_id or no parent_id
-        return eb.or([
-          eb('m.parent_id', '=', params.parent_id),
-          eb('m.parent_id', 'is', null)
-        ]);
-      } else {
-        // If no parent_id, only get messages without parent_id
-        return eb('m.parent_id', 'is', null);
-      }
-    })
-    .orderBy(sql`CASE WHEN m.parent_id IS NOT NULL THEN 0 ELSE 1 END`, 'asc')
-    .orderBy('m.id', 'desc')
-    .limit(10)
-    .select(['m.content', 'm.user_id', 'u.username'])
-    .execute();
+  const typingInterval = setInterval(async () => {
+    await publishTyping({
+      channelId: params.channelId,
+      userId: params.userId,
+      username: `${username} (bot)`
+    });
+  }, 1000);
 
-  // Get few-shot examples for additional context
-  const fewShotExamples = await getAvatarFewShotExamples(params.channelId, params.userId);
-  const fewShotMessages = fewShotExamples.flatMap(example => [
-    ...example.context.map(msg => ({
-      role: 'user' as const,
-      content: msg.content
-    })),
-    {
-      role: 'assistant' as const,
-      content: example.avatar_response.content
+  try {
+    // Get channel and workspace names
+    const channelAndWorkspace = await db
+      .selectFrom('channels as c')
+      .innerJoin('workspaces as w', 'w.id', 'c.workspace_id')
+      .where('c.id', '=', params.channelId)
+      .where('w.id', '=', params.workspaceId)
+      .select(['c.name as channelName', 'w.name as workspaceName'])
+      .executeTakeFirst();
+
+    if (!channelAndWorkspace) {
+      throw new Error('Channel or workspace not found');
     }
-  ]);
 
-  // Generate embedding for the recent conversation to find similar messages
-  const recentConversation = recentMessages.map(msg => `${msg.username}: ${msg.content}`).join('\n');
-  const embedding = await generateEmbedding(recentConversation);
+    // Get the last 10 messages from the channel
+    const recentMessages = await db
+      .selectFrom('messages as m')
+      .innerJoin('users as u', 'u.id', 'm.user_id')
+      .where('m.channel_id', '=', params.channelId)
+      .where('m.deleted_at', 'is', null)
+      .where(eb => {
+        if (params.parent_id) {
+          // If parent_id provided, get messages with same parent_id or no parent_id
+          return eb.or([
+            eb('m.parent_id', '=', params.parent_id),
+            eb('m.parent_id', 'is', null)
+          ]);
+        } else {
+          // If no parent_id, only get messages without parent_id
+          return eb('m.parent_id', 'is', null);
+        }
+      })
+      .orderBy(sql`CASE WHEN m.parent_id IS NOT NULL THEN 0 ELSE 1 END`, 'asc')
+      .orderBy('m.id', 'desc')
+      .limit(10)
+      .select(['m.content', 'm.user_id', 'u.username'])
+      .execute();
 
-  // Find semantically similar messages
-  const similarMessages = await semanticSearch(
-    embedding,
-    params.requestingUserId,
-    params.workspaceId,
-    5 // Get top 5 similar messages
-  );
+    // Get few-shot examples for additional context
+    const fewShotExamples = await getAvatarFewShotExamples(params.channelId, params.userId);
+    const fewShotMessages = fewShotExamples.flatMap(example => [
+      ...example.context.map(msg => ({
+        role: 'user' as const,
+        content: msg.content
+      })),
+      {
+        role: 'assistant' as const,
+        content: example.avatar_response.content
+      }
+    ]);
 
-  const similarMessagesContent = similarMessages
-    .filter(msg => !recentMessages.some(recent => recent.content === msg.content))
-    .map(msg => `[Related from earlier] ${msg.username}: ${msg.content}`)
-    .join('\n');
+    // Generate embedding for the recent conversation to find similar messages
+    const recentConversation = recentMessages.map(msg => `${msg.username}: ${msg.content}`).join('\n');
+    const embedding = await generateEmbedding(recentConversation);
+
+    // Find semantically similar messages
+    const similarMessages = await semanticSearch(
+      embedding,
+      params.requestingUserId,
+      params.workspaceId,
+      5 // Get top 5 similar messages
+    );
+
+    const similarMessagesContent = similarMessages
+      .filter(msg => !recentMessages.some(recent => recent.content === msg.content))
+      .map(msg => `[Related from earlier] ${msg.username}: ${msg.content}`)
+      .join('\n');
 
     console.log(fewShotMessages)
 
-  // Combine recent and similar messages, format for OpenAI API
-  const formattedMessages = [
-    {
-      role: 'developer' as const,
-      content: `You are serving as an avatar for a user in a messaging app. Please only respond with the content of the message, no other text. Here are some messages that may be helpful in providing a response:\n\n${similarMessagesContent}`
-    },
-    ...fewShotMessages,
-    ...recentMessages.reverse().map(msg => ({
-      role: msg.user_id === params.userId ? 'assistant' as const : 'user' as const,
-      content: msg.content
-    }))
-  ];
+    // Combine recent and similar messages, format for OpenAI API
+    const formattedMessages = [
+      {
+        role: 'developer' as const,
+        content: `You are serving as an avatar for a user in a messaging app. Please only respond with the content of the message, no other text. Here are some messages that may be helpful in providing a response:\n\n${similarMessagesContent}`
+      },
+      ...fewShotMessages,
+      ...recentMessages.reverse().map(msg => ({
+        role: msg.user_id === params.userId ? 'assistant' as const : 'user' as const,
+        content: msg.content
+      }))
+    ];
 
-  // Generate the AI response
-  const content = await generateAvatarResponse({
-    channelName: channelAndWorkspace.channelName,
-    workspaceName: channelAndWorkspace.workspaceName,
-    messages: formattedMessages
-  });
+    const content = await generateAvatarResponse({
+      channelName: channelAndWorkspace.channelName,
+      workspaceName: channelAndWorkspace.workspaceName,
+      messages: formattedMessages
+    });
 
-  // Create the message with is_avatar flag
-  return createMessage(params.channelId, params.userId, {
-    content,
-    is_avatar: true,
-    parent_id: params.parent_id,
-    attachments: []
-  });
+    // Create the message with is_avatar flag
+    return createMessage(params.channelId, params.userId, {
+      content,
+      is_avatar: true,
+      parent_id: params.parent_id,
+      attachments: []
+    });
+  } catch (error) {
+    throw error;
+  } finally {
+    clearInterval(typingInterval);
+  }
 }
 
 export async function createMessageEmbedding(params: {
