@@ -4,8 +4,8 @@ import { authenticate, AuthRequest } from '../../middleware/auth';
 import { registry } from '../../utils/openapi';
 import OpenAI from 'openai';
 import { GenerateEmbeddingsResponseSchema, ErrorResponseSchema, SemanticSearchResponseSchema, SemanticSearchRequestSchema } from './types';
-import { getMessagesWithoutEmbeddings } from '../../db/messages';
-import { createMessageEmbedding } from '../../services/openai';
+import { createMessageEmbedding, getMessagesWithoutEmbeddings } from '../../db/messages';
+import { generateEmbedding } from '../../services/openai';
 import { semanticSearch } from '../../db/search';
 const router = Router();
 
@@ -58,15 +58,11 @@ const generateAllEmbeddingsHandler: RequestHandler = async (req: AuthRequest, re
       // Generate embeddings in parallel for the batch
       const embeddingPromises = batch.map(async (message) => {
         try {
-          const response = await openai.embeddings.create({
-            input: message.content,
-            model: "text-embedding-3-large",
-            dimensions: 2000,
-          });
+          const embedding = await generateEmbedding(message.content);
 
           await createMessageEmbedding({
             messageId: message.id,
-            embedding: response.data[0].embedding,
+            embedding: embedding,
             model: 'text-embedding-3-large',
           });
 
@@ -151,13 +147,7 @@ const semanticSearchHandler: RequestHandler = async (req: AuthRequest, res) => {
     });
 
     // Generate embedding for the query
-    const response = await openai.embeddings.create({
-      input: params.query,
-      model: "text-embedding-3-large",
-      dimensions: 2000,
-    });
-
-    const embedding = response.data[0].embedding;
+    const embedding = await generateEmbedding(params.query);
 
     // Search for similar messages
     const messages = await semanticSearch(embedding, params.limit);

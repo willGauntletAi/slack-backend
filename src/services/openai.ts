@@ -7,23 +7,6 @@ export const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-export async function createMessageEmbedding(params: {
-  messageId: string;
-  embedding: number[];
-  model: string;
-}): Promise<void> {
-  // Format the embedding array as a PostgreSQL vector string
-  const vectorStr = `[${params.embedding.join(',')}]`;
-  
-  await db
-    .insertInto('message_embeddings')
-    .values({
-      message_id: params.messageId,
-      embedding: sql`${vectorStr}::vector`,
-      model: params.model,
-    })
-    .execute();
-}
 
 export async function generateAvatarResponse(params: {
   channelName: string | null;
@@ -44,4 +27,14 @@ export async function generateAvatarResponse(params: {
   });
 
   return completion.choices[0]?.message?.content || "I apologize, but I couldn't generate a response at this time.";
+}
+
+export async function generateEmbedding(text: string): Promise<number[]> {
+  const response = await openai.embeddings.create({
+    input: text,
+    model: "text-embedding-3-large",
+    dimensions: 2000,
+  });
+
+  return response.data[0].embedding;
 } 
