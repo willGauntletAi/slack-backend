@@ -119,6 +119,19 @@ export async function createMessage(channelId: string, userId: string, data: Cre
       updated_at: result.updated_at.toISOString(),
     }
   });
+  // Generate and store embedding for the message
+  try {
+    const embedding = await generateEmbedding(`${result.created_at.toISOString()} ${result.username}: ${data.content}`);
+    await createMessageEmbedding({
+      messageId: result.id.toString(),
+      embedding,
+      model: 'text-embedding-3-large',
+    });
+  } catch (error) {
+    console.error('Failed to generate embedding for message:', error);
+    // Don't throw the error as the message was still created successfully
+  }
+
 
   return result;
 }
