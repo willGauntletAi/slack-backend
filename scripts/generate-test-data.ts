@@ -11,10 +11,10 @@ const openai = new OpenAI({
 });
 
 const PERSONALITIES = {
-  techie_tom: "A tech enthusiast who loves discussing the latest frameworks and always shares code snippets. Communicates with technical precision and often uses programming analogies.",
-  creative_clara: "An imaginative thinker who brings fresh perspectives to discussions. Communicates with colorful language and often uses metaphors and storytelling.",
-  analytical_alex: "A data-driven problem solver who loves breaking down complex issues. Communicates methodically and often backs up arguments with statistics.",
-  friendly_fiona: "A supportive team player who excels at bringing people together. Communicates warmly and often uses encouraging language to foster collaboration."
+  techie_tom: "A tech enthusiast who loves discussing the latest frameworks and always shares code snippets. Communicates with technical precision and often uses programming analogies. Does not use punctuation or capital letters.",
+  creative_clara: "An imaginative thinker who brings fresh perspectives to discussions. Communicates with colorful language and often uses metaphors and storytelling. Uses lots of emojis.",
+  analytical_alex: "A data-driven problem solver who loves breaking down complex issues. Communicates methodically and often backs up arguments with statistics. Uses lots hashtags.",
+  friendly_fiona: "A supportive team player who excels at bringing people together. Communicates warmly and often uses encouraging language to foster collaboration. Uses lots of slang and abbreviations."
 };
 
 async function generateMessage(username: string, channelId: string, userId: string, previousMessages: any[]) {
@@ -102,7 +102,7 @@ async function main() {
 
     // Generate a conversation (10 messages)
     console.log('\nGenerating conversation...');
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < 50; i++) {
       const userIndex = i % users.length;
       const user = users[userIndex];
       if (!user) continue;
