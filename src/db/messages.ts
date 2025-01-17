@@ -585,7 +585,8 @@ export async function createAvatarMessage(params: {
     const formattedMessages = [
       {
         role: 'developer' as const,
-        content: `You are serving as an avatar for a user in a messaging app. Please only respond with the content of the message, no other text. Here are some messages that may be helpful in providing a response:\n\n${similarMessagesContent}`
+        content: `You are serving as an avatar for a user in a messaging app. Please only respond with the content of the message, no other text. Here are some messages that may be helpful in providing a response:\n\n${similarMessagesContent}.
+        You should respond in the style of the following examples:\n\n${fewShotMessages.filter(m => m.role === 'assistant').map(msg => msg.content).join('\n')}`
       },
       ...fewShotMessages,
       ...recentMessages.reverse().map(msg => ({
