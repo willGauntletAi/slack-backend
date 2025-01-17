@@ -3,8 +3,9 @@ import { z } from 'zod';
 import { isChannelMember } from './channels';
 import { publishNewMessage } from '../services/redis';
 import { jsonArrayFrom } from 'kysely/helpers/postgres';
-import { generateAvatarResponse } from '../services/openai';
+import { generateAvatarResponse, generateEmbedding } from '../services/openai';
 import { sql } from 'kysely';
+import { semanticSearch } from '../utils/semanticSearch';
 
 
 // Schema for creating a message
@@ -94,8 +95,11 @@ export async function createMessage(channelId: string, userId: string, data: Cre
       .select(['id', 'file_key', 'filename', 'mime_type', 'size'])
       .execute();
 
+    const workspaceIdResult = await trx.selectFrom('channels').where('id', '=', channelId).select('workspace_id').executeTakeFirstOrThrow();
+
     return {
       ...message,
+      workspace_id: workspaceIdResult.workspace_id,
       username: user.username,
       attachments: attachments.map(att => ({
         ...att,
@@ -377,6 +381,7 @@ export async function createAvatarMessage(params: {
   channelId: string;
   workspaceId: string;
   userId: string;
+  requestingUserId: string;
 }) {
   // Check if user is a member of the channel
   const isMember = await isChannelMember(params.channelId, params.userId);
@@ -397,11 +402,50 @@ export async function createAvatarMessage(params: {
     throw new Error('Channel or workspace not found');
   }
 
+  // Get the last 10 messages from the channel
+  const recentMessages = await db
+    .selectFrom('messages as m')
+    .innerJoin('users as u', 'u.id', 'm.user_id')
+    .where('m.channel_id', '=', params.channelId)
+    .where('m.deleted_at', 'is', null)
+    .orderBy('m.id', 'desc')
+    .limit(10)
+    .select(['m.content', 'm.user_id', 'u.username'])
+    .execute();
+
+  // Generate embedding for the recent conversation to find similar messages
+  const recentConversation = recentMessages.map(msg => `${msg.username}: ${msg.content}`).join('\n');
+  const embedding = await generateEmbedding(recentConversation);
+
+  // Find semantically similar messages
+  const similarMessages = await semanticSearch(
+    embedding,
+    params.requestingUserId,
+    params.workspaceId,
+    5, // Get top 5 similar messages
+  );
+
+  // Combine recent and similar messages, format for OpenAI API
+  const formattedMessages = [
+    // Recent messages first
+    ...recentMessages.reverse().map(msg => ({
+      role: msg.user_id === params.userId ? 'assistant' as const : 'user' as const,
+      content: `${msg.username}: ${msg.content}`
+    })),
+    // Then add semantically similar messages if they're not already included
+    ...similarMessages
+      .filter(msg => !recentMessages.some(recent => recent.content === msg.content))
+      .map(msg => ({
+        role: msg.userId === params.userId ? 'assistant' as const : 'user' as const,
+        content: `[Related from earlier] ${msg.username}: ${msg.content}`
+      }))
+  ];
+
   // Generate the AI response
   const content = await generateAvatarResponse({
     channelName: channelAndWorkspace.channelName,
     workspaceName: channelAndWorkspace.workspaceName,
-    messages: []
+    messages: formattedMessages
   });
 
   // Create the message with is_avatar flag

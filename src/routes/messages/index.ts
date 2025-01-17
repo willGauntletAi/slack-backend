@@ -3,7 +3,7 @@ import { z } from 'zod';
 import type { RequestHandler } from 'express';
 import { authenticate, AuthRequest } from '../../middleware/auth';
 import { registry } from '../../utils/openapi';
-import { createMessage, listChannelMessages, updateMessage, deleteMessage } from '../../db/messages';
+import { createMessage, listChannelMessages, updateMessage, deleteMessage, createAvatarMessage } from '../../db/messages';
 import { addMessageReaction, deleteMessageReaction } from '../../db/message-reactions';
 import {
   createMessageRequestSchema,
@@ -89,6 +89,22 @@ const createMessageHandler: RequestHandler<{ id: string }, {}, z.infer<typeof cr
 
     const data = createMessageRequestSchema.parse(req.body);
     const message = await createMessage(req.params.id, req.user.id, {...data, is_avatar: false});
+
+    // If request_avatar is provided, generate an AI response
+    if (data.request_avatar) {
+      try {
+        createAvatarMessage({
+          channelId: req.params.id,
+          workspaceId: message.workspace_id,
+          userId: data.request_avatar,
+          requestingUserId: req.user.id
+        });
+      } catch (error) {
+        console.error('Failed to generate avatar response:', error);
+        // Don't fail the original message creation if avatar fails
+      }
+    }
+
     res.status(201).json({
       ...message,
       created_at: message.created_at.toISOString(),
