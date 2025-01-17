@@ -11,7 +11,7 @@ export const openai = new OpenAI({
 export async function generateAvatarResponse(params: {
   channelName: string | null;
   workspaceName: string;
-  messages: { role: "assistant" | "user", content: string }[];
+  messages: { role: "assistant" | "user" | "developer", content: string }[];
 }): Promise<string> {
   const completion = await openai.chat.completions.create({
     model: "gpt-4o-mini",

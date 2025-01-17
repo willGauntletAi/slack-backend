@@ -376,6 +376,99 @@ export async function getMessagesWithoutEmbeddings(): Promise<MessageForEmbeddin
     .execute();
 }
 
+// Get recent avatar message pairs
+export async function getRecentAvatarMessagePairs(channelId: string, userId: string, limit: number = 5) {
+  // Get messages where is_avatar is true and join with their previous message
+  return db
+    .selectFrom('messages as avatar_msg')
+    .innerJoin('users as avatar_user', 'avatar_user.id', 'avatar_msg.user_id')
+    .innerJoin('messages as prev_msg', (join) => 
+      join.onRef('prev_msg.channel_id', '=', 'avatar_msg.channel_id')
+          .onRef('prev_msg.id', '<', 'avatar_msg.id')
+          .on('prev_msg.deleted_at', 'is', null)
+    )
+    .innerJoin('users as prev_user', 'prev_user.id', 'prev_msg.user_id')
+    .where('avatar_msg.channel_id', '=', channelId)
+    .where('avatar_msg.user_id', '=', userId)
+    .where('avatar_msg.is_avatar', '=', true)
+    .where('avatar_msg.deleted_at', 'is', null)
+    .where('avatar_msg.parent_id', 'is', null)
+    .where(({ eb }) => eb.not(
+      eb.exists(
+        eb.selectFrom('messages as intermediate')
+          .whereRef('intermediate.channel_id', '=', 'avatar_msg.channel_id')
+          .whereRef('intermediate.id', '>', 'prev_msg.id')
+          .whereRef('intermediate.id', '<', 'avatar_msg.id')
+          .where('intermediate.deleted_at', 'is', null)
+          .limit(1)
+      )
+    ))
+    .where('prev_msg.parent_id', 'is', null)
+    .select([
+      'prev_msg.id as trigger_message_id',
+      'prev_msg.content as trigger_content',
+      'prev_user.username as trigger_username',
+      'avatar_msg.id as avatar_message_id',
+      'avatar_msg.content as avatar_content',
+      'avatar_user.username as avatar_username',
+    ])
+    .orderBy('avatar_msg.id', 'desc')
+    .limit(limit)
+    .execute();
+}
+
+// Get few-shot examples of avatar responses with context
+export async function getAvatarFewShotExamples(channelId: string, userId: string, contextMessageCount: number = 5, limit: number = 5) {
+  // First get the avatar messages
+  const avatarMessages = await db
+    .selectFrom('messages as avatar_msg')
+    .innerJoin('users as avatar_user', 'avatar_user.id', 'avatar_msg.user_id')
+    .where('avatar_msg.channel_id', '=', channelId)
+    .where('avatar_msg.user_id', '=', userId)
+    .where('avatar_msg.is_avatar', '=', true)
+    .where('avatar_msg.deleted_at', 'is', null)
+    .where('avatar_msg.parent_id', 'is', null)
+    .select([
+      'avatar_msg.id as avatar_message_id',
+      'avatar_msg.content as avatar_content',
+      'avatar_user.username as avatar_username'
+    ])
+    .orderBy('avatar_msg.id', 'desc')
+    .limit(limit)
+    .execute();
+
+  // For each avatar message, get the previous messages
+  const fewShotExamples = await Promise.all(
+    avatarMessages.map(async (avatarMsg) => {
+      const previousMessages = await db
+        .selectFrom('messages as m')
+        .innerJoin('users as u', 'u.id', 'm.user_id')
+        .where('m.channel_id', '=', channelId)
+        .where('m.id', '<', avatarMsg.avatar_message_id)
+        .where('m.deleted_at', 'is', null)
+        .where('m.parent_id', 'is', null)
+        .select([
+          'm.id',
+          'm.content',
+          'u.username'
+        ])
+        .orderBy('m.id', 'desc')
+        .limit(contextMessageCount)
+        .execute();
+
+      return {
+        context: previousMessages.reverse(),
+        avatar_response: {
+          content: avatarMsg.avatar_content,
+          username: avatarMsg.avatar_username
+        }
+      };
+    })
+  );
+
+  return fewShotExamples;
+}
+
 // Create a message from the AI avatar
 export async function createAvatarMessage(params: {
   channelId: string;
@@ -427,6 +520,19 @@ export async function createAvatarMessage(params: {
     .select(['m.content', 'm.user_id', 'u.username'])
     .execute();
 
+  // Get few-shot examples for additional context
+  const fewShotExamples = await getAvatarFewShotExamples(params.channelId, params.userId);
+  const fewShotMessages = fewShotExamples.flatMap(example => [
+    ...example.context.map(msg => ({
+      role: 'user' as const,
+      content: msg.content
+    })),
+    {
+      role: 'assistant' as const,
+      content: example.avatar_response.content
+    }
+  ]);
+
   // Generate embedding for the recent conversation to find similar messages
   const recentConversation = recentMessages.map(msg => `${msg.username}: ${msg.content}`).join('\n');
   const embedding = await generateEmbedding(recentConversation);
@@ -436,23 +542,27 @@ export async function createAvatarMessage(params: {
     embedding,
     params.requestingUserId,
     params.workspaceId,
-    5, // Get top 5 similar messages
+    5 // Get top 5 similar messages
   );
+
+  const similarMessagesContent = similarMessages
+    .filter(msg => !recentMessages.some(recent => recent.content === msg.content))
+    .map(msg => `[Related from earlier] ${msg.username}: ${msg.content}`)
+    .join('\n');
+
+    console.log(fewShotMessages)
 
   // Combine recent and similar messages, format for OpenAI API
   const formattedMessages = [
-    // Recent messages first
+    {
+      role: 'developer' as const,
+      content: `You are serving as an avatar for a user in a messaging app. Please only respond with the content of the message, no other text. Here are some messages that may be helpful in providing a response:\n\n${similarMessagesContent}`
+    },
+    ...fewShotMessages,
     ...recentMessages.reverse().map(msg => ({
       role: msg.user_id === params.userId ? 'assistant' as const : 'user' as const,
-      content: `${msg.username}: ${msg.content}`
-    })),
-    // Then add semantically similar messages if they're not already included
-    ...similarMessages
-      .filter(msg => !recentMessages.some(recent => recent.content === msg.content))
-      .map(msg => ({
-        role: msg.userId === params.userId ? 'assistant' as const : 'user' as const,
-        content: `[Related from earlier] ${msg.username}: ${msg.content}`
-      }))
+      content: msg.content
+    }))
   ];
 
   // Generate the AI response
