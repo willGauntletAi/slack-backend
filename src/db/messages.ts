@@ -503,6 +503,11 @@ export async function createAvatarMessage(params: {
     throw new Error('User not found');
   }
 
+    await publishTyping({
+      channelId: params.channelId,
+      userId: params.userId,
+      username: `${username} (bot)`
+    });
   const typingInterval = setInterval(async () => {
     await publishTyping({
       channelId: params.channelId,
