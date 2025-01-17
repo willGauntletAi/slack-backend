@@ -93,11 +93,12 @@ const createMessageHandler: RequestHandler<{ id: string }, {}, z.infer<typeof cr
     // If request_avatar is provided, generate an AI response
     if (data.request_avatar) {
       try {
-        createAvatarMessage({
+        await createAvatarMessage({
           channelId: req.params.id,
           workspaceId: message.workspace_id,
           userId: data.request_avatar,
-          requestingUserId: req.user.id
+          requestingUserId: req.user.id,
+          parent_id: data.parent_id
         });
       } catch (error) {
         console.error('Failed to generate avatar response:', error);

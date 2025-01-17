@@ -382,6 +382,7 @@ export async function createAvatarMessage(params: {
   workspaceId: string;
   userId: string;
   requestingUserId: string;
+  parent_id?: string;
 }) {
   // Check if user is a member of the channel
   const isMember = await isChannelMember(params.channelId, params.userId);
@@ -408,6 +409,19 @@ export async function createAvatarMessage(params: {
     .innerJoin('users as u', 'u.id', 'm.user_id')
     .where('m.channel_id', '=', params.channelId)
     .where('m.deleted_at', 'is', null)
+    .where(eb => {
+      if (params.parent_id) {
+        // If parent_id provided, get messages with same parent_id or no parent_id
+        return eb.or([
+          eb('m.parent_id', '=', params.parent_id),
+          eb('m.parent_id', 'is', null)
+        ]);
+      } else {
+        // If no parent_id, only get messages without parent_id
+        return eb('m.parent_id', 'is', null);
+      }
+    })
+    .orderBy(sql`CASE WHEN m.parent_id IS NOT NULL THEN 0 ELSE 1 END`, 'asc')
     .orderBy('m.id', 'desc')
     .limit(10)
     .select(['m.content', 'm.user_id', 'u.username'])
@@ -452,6 +466,7 @@ export async function createAvatarMessage(params: {
   return createMessage(params.channelId, params.userId, {
     content,
     is_avatar: true,
+    parent_id: params.parent_id,
     attachments: []
   });
 }
